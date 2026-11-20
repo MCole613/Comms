@@ -25,12 +25,12 @@ Everyone also gets **My Tasks** (check-off list), **My Requests**, **Calendar** 
 Use the Google account that should own the system and send its emails (yours, or a comms@ account).
 
 1. Go to [script.google.com](https://script.google.com), choose **New project**, and name it *Communications App*.
-2. Create each file in `src/` with the same name (the editor adds `.gs`/`.html`) and paste in its contents:
-   - Script files: `Calendar`, `Code`, `Config`, `Data`, `Design`, `FormDefs`, `FormLogic`, `Import`, `Notify`, `People`, `Plan`, `Requests`, `Setup`
-   - HTML files: `App`, `Index`, `Styles`
-   - `appsscript.json`: turn on *Project Settings → Show "appsscript.json"* first
+2. Copy in the **3 files from the `dist/` folder**:
+   - **`Code.gs`**: replace everything in the editor's existing `Code.gs` with this file.
+   - **`Index.html`**: click **+ → HTML**, name it `Index` (the editor adds `.html`), and paste in this file.
+   - **`appsscript.json`**: open ⚙ *Project Settings*, turn on **Show "appsscript.json" manifest file in editor**, go back to the editor, open `appsscript.json`, and replace its contents with this file.
 
-   (Or use [clasp](https://github.com/google/clasp): copy `.clasp.json.example` to `.clasp.json`, add the Script ID, then run `clasp push`.)
+   Click 💾 **Save**.
 3. Choose **`setup`** in the function dropdown, click **Run**, and approve the permissions. This creates the locked data file, makes you an admin, and schedules the Monday digest.
 4. Choose **`importFromHub`** and click **Run**. This brings over everything from the old hub: settings (brand, sprint cap, rounds, calendar, Drive folder, ministries), people and roles, all requests, timeline tasks and design feedback history. It can safely be re-run.
 5. Choose **Deploy → New deployment → Web app**, set *Execute as* to **Me** and *Who has access* to **Anyone within Calvary**, then share the link.
@@ -45,10 +45,13 @@ When the app is live, turn off the old form (*Responses → Accepting responses*
 - **Tier suggestions**: `suggestTier()` in `src/Plan.gs`. **Runway** requirements: `TIER_INFO` in the same file.
 - **Form questions**: `src/FormDefs.gs`.
 
+After changing anything in `src/`, run `npm run bundle` and paste the updated `dist/` files into Apps Script. Then choose **Deploy → Manage deployments → Edit → New version**, which keeps the same link.
+
 ## Development
 
 ```bash
-npm test          # timeline templates checked against the hub's real schedules,
+npm run bundle    # rebuild dist/ (the 3 files to paste) after editing src/
+npm test          # rebuilds dist/, then runs the tests: timeline templates checked against the hub's real schedules,
                   # plus end-to-end workflow tests against mocked Google services
 npm run preview   # renders the real UI with sample data → ./preview/*.png
 ```

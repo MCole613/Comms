@@ -162,6 +162,7 @@
   .activity .when { font: 600 12px var(--head-font); color: var(--muted); }
   .home-grid .item.task { grid-template-columns: 28px 96px minmax(0, 1fr); }
   .home-grid .item.task .right { grid-column: 3; }
+  @media (max-width: 640px) { .home-grid .item.task { grid-template-columns: 28px minmax(0, 1fr); } .home-grid .item.task > :nth-child(n+3) { grid-column: 2; } .home-grid .item.task .right { justify-content: flex-start; } }
   .profile { max-width: 520px; margin: 30px auto; }
 
   .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }

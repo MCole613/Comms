@@ -93,7 +93,7 @@ function makeCalendar() {
   return cal;
 }
 
-function createContext({ userEmail, now, owner = 'admin@example.org' }) {
+function createContext({ userEmail, now, owner = 'admin@example.org', sources }) {
   const drive = makeDrive();
   const calendar = makeCalendar();
   const mail = [];
@@ -145,8 +145,9 @@ function createContext({ userEmail, now, owner = 'admin@example.org' }) {
   };
   vm.createContext(ctx);
   const src = path.join(__dirname, '..', 'src');
-  for (const f of fs.readdirSync(src).filter(f => f.endsWith('.gs'))) {
-    vm.runInContext(fs.readFileSync(path.join(src, f), 'utf8'), ctx, { filename: f });
+  const files = sources || fs.readdirSync(src).filter(f => f.endsWith('.gs')).map(f => path.join(src, f));
+  for (const f of files) {
+    vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: path.basename(f) });
   }
   Object.assign(ctx, {
     __drive: drive, __calendar: calendar, __mail: mail, __spreadsheets: spreadsheets,
