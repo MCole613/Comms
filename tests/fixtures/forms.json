@@ -1,0 +1,1162 @@
+{
+ "request": {
+  "title": "Calvary Communications & Design Request",
+  "description": "One form for every communications and design request. Every request is reviewed, assigned a tier, and scheduled. Remember our rule: One Story + One Next Step.\n\nHow much time we need for Promoting an event or ministry: \nLevel 1 Ministry/Event: At least 12 weeks out\nLevel 2 Ministry/Event: At least 5-7 weeks out\nLevel 3 Ministry/Event: At least 5-7 weeks out\nLevel 4 Ministry/Event: At least 3 weeks out\nSermon series: At least 10 weeks before the series starts.\nGraphic design only: At least 3 weeks before you need the final design.\nNeed it sooner? Submit anyway and say comment that in the form. We will do our best, but rushed requests may get a lighter plan or unable to fulfill request.",
+  "items": [
+   {
+    "id": "1949260483",
+    "type": "TEXT",
+    "title": "Your name",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1108257160",
+    "type": "TEXT",
+    "title": "Your email",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1672090013",
+    "type": "LIST",
+    "title": "Ministry / department",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Guest Services",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "LifeGroups",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Calvary Kids",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Calvary Students",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Calvary Young Adults",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Worship / Production",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "NextGen Groups",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Calvary Cares",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Pastoral / Staff",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Other",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "983853321",
+    "type": "MULTIPLE_CHOICE",
+    "title": "What do you need?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Promoting an event or ministry (communications, plus design if needed)",
+      "nav": {
+       "type": "GO_TO_PAGE",
+       "page": "927907554"
+      }
+     },
+     {
+      "value": "Sermon series",
+      "nav": {
+       "type": "GO_TO_PAGE",
+       "page": "2003740637"
+      }
+     },
+     {
+      "value": "Graphic design only (t-shirt, logo, flyer, etc. - no communications plan)",
+      "nav": {
+       "type": "GO_TO_PAGE",
+       "page": "1556738114"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "2003740637",
+    "type": "PAGE_BREAK",
+    "title": "Sermon series details",
+    "help": "One series = one big idea and one next step.",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "205885625",
+    "type": "TEXT",
+    "title": "Series title (working title is fine)",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "278611218",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Big idea in one sentence",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1160074086",
+    "type": "TEXT",
+    "title": "Main scripture / theme / book or resource it is based on",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "2080755610",
+    "type": "DATE",
+    "title": "Series launch date (first Sunday)",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1966845341",
+    "type": "TEXT",
+    "title": "Number of weeks",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "63363854",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Weekly sermon titles and scriptures (if known)",
+    "help": "\"TBD\" is fine. The designer will build a template that works for any title.",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "39495021",
+    "type": "PARAGRAPH_TEXT",
+    "title": "What ONE next step goes with this series?",
+    "help": "Example: \"Invite a friend,\" \"Join a LifeGroup,\" or \"Take the 7-day challenge.\" One action only.",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "667140008",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Visual direction (mood, colors, imagery, anything to avoid)",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1288411315",
+    "type": "CHECKBOX",
+    "title": "What needs to be designed?",
+    "help": "STANDARD SIZES (you do not need to type these; the designer uses them):\n- Series key art, title slide, weekly sermon slides, lobby screens: 1920 x 1080 px (16:9)\n- Social graphics: feed 1080 x 1080 px, story 1080 x 1920 px, banner / Facebook cover 1920 x 1005 px\n- YouTube thumbnails: 1280 x 720 px. Podcast art: 3000 x 3000 px\n- Invite cards / handouts: 4 x 6 in with 0.125 in bleed, 300 dpi, print-ready PDF\n- EDDM Invites: 6.25 x 8 with a 0.125 bleed, 300 dpi, print ready PDF\nNeed something different? Say so in the box below.",
+    "required": true,
+    "choices": [
+     {
+      "value": "Series key art / main graphic",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Series title slide & weekly sermon slide template",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Weekly sermon graphics (all weeks)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Social graphics (feed, story, banner)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "YouTube thumbnails & podcast art",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Lobby screens / digital sign",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Invite cards",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "EDDM Invites",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Other (explain below)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "612596931",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Sizes, print specs, or text that must appear",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "731981762",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Inspiration or reference links",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1334221841",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Anything else we should know?",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1942436404",
+    "type": "MULTIPLE_CHOICE",
+    "title": "What kind of next step is it?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Invite a friend",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "Join a LifeGroup",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "Serve",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "Give",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "Take a challenge / do something this week",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "Other",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1556738114",
+    "type": "PAGE_BREAK",
+    "title": "Graphic design only",
+    "help": "Design requests only. No communications plan, timeline, or promotion will be created.",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1224865066",
+    "type": "TEXT",
+    "title": "What are we making? (example: youth camp t-shirt)",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "522182269",
+    "type": "PARAGRAPH_TEXT",
+    "title": "What is it for, and who is it for?",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "124757286",
+    "type": "CHECKBOX",
+    "title": "What type of design is it?",
+    "help": "STANDARD SIZES (you do not need to type these; the designer uses them):\n- T-shirt / apparel: vector artwork (AI or PDF), print area up to 12 x 14 in\n- Logo / icon: vector (SVG or AI) plus transparent PNG\n- Flyer / poster: flyer 8.5 x 11 in; poster 11 x 17 in; 300 dpi, 0.125 in bleed, print-ready PDF\n- Banner / signage: tell us the final physical size; we design it at full scale\n- Social graphic: feed 1080 x 1080 px, story 1080 x 1920 px\n- Slide / screen graphic: 1920 x 1080 px\n- Print piece: card 4 x 6 in, handout 5.5 x 8.5 in, program 8.5 x 11 in; 300 dpi, 0.125 in bleed\n\nNeed something different? Say so in the box below.",
+    "required": true,
+    "choices": [
+     {
+      "value": "T-shirt / apparel",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Logo / icon",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Flyer / poster",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Banner / signage",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Social graphic",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Slide / screen graphic",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Print piece (card, handout, program)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Other (explain below)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "129851436",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Sizes, quantities, colors, and printer or vendor details",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "383290559",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Exact text that must appear (and any logos or images to include)",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "395895880",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Inspiration or reference links",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "54662808",
+    "type": "DATE",
+    "title": "Date you need the finished files",
+    "help": "Allow at least two weeks if you can.",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1414162943",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Anything else the designer should know?",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "2111739639",
+    "type": "MULTIPLE_CHOICE",
+    "title": "Is the text final?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Yes",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "Not yet",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     },
+     {
+      "value": "I need help writing it",
+      "nav": {
+       "type": "SUBMIT"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "927907554",
+    "type": "PAGE_BREAK",
+    "title": "Audience & the ask",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1212913760",
+    "type": "TEXT",
+    "title": "Event or initiative name",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "109017071",
+    "type": "MULTIPLE_CHOICE",
+    "title": "Who is this for?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Whole church + community",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "A specific next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "A specific age group (Kids / Students / Young Adults)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "A specific ministry or group",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1631653380",
+    "type": "MULTIPLE_CHOICE",
+    "title": "How much of the church is this relevant to?",
+    "help": "Count everyone it touches: kids + parents + volunteers all count. Be honest; the 50% Rule decides how big the push is.",
+    "required": true,
+    "choices": [
+     {
+      "value": "Under 25%",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "25-49%",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "50-79%",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "80%+",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1344341514",
+    "type": "MULTIPLE_CHOICE",
+    "title": "Is this a \"bridge\" event designed to invite first-time guests or the community?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Yes",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "No",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "2029062981",
+    "type": "MULTIPLE_CHOICE",
+    "title": "What is the ONE next step you want people to take?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Sign up / register",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Attend",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Give",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Serve",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Just be aware (no action)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "463954864",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Describe that one next step in a sentence",
+    "help": "Example: \"Sign up for a LifeGroup in Church Center.\" One action only.",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1090123485",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Share one story or human moment that shows why this matters",
+    "help": "Stories move people; facts and details do not. Who changed? What happened?",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1782781318",
+    "type": "PAGE_BREAK",
+    "title": "Dates & details",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "2118987448",
+    "type": "DATE",
+    "title": "Event / launch date",
+    "help": "Event day, or the day sign-ups close / the launch happens.",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1051441458",
+    "type": "TEXT",
+    "title": "Time and location",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1219767872",
+    "type": "MULTIPLE_CHOICE",
+    "title": "Does this need registration in PCO / Church Center?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Yes",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "No",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Not sure",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1506056796",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Key details (cost, ages, what to bring, deadlines)",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "95259267",
+    "type": "MULTIPLE_CHOICE",
+    "title": "Do you need graphic design for this?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Yes",
+      "nav": {
+       "type": "GO_TO_PAGE",
+       "page": "464928949"
+      }
+     },
+     {
+      "value": "No",
+      "nav": {
+       "type": "GO_TO_PAGE",
+       "page": "970029299"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "464928949",
+    "type": "PAGE_BREAK",
+    "title": "Design details",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "766503713",
+    "type": "CHECKBOX",
+    "title": "What needs to be designed?",
+    "help": "STANDARD SIZES (you do not need to type these; the designer uses them):\n- Main graphic / key art: 1920 x 1080 px (16:9)\n- Social graphics: feed 1080 x 1080 px (square), story/reel 1080 x 1920 px, Facebook event cover 1920 x 1005 px\n- Stage / lobby screen slides: 1920 x 1080 px\n- Invite cards / print: 4 x 6 in with 0.125 in bleed, 300 dpi, print-ready PDF\n- Video bumper / motion: 1920 x 1080 px, MP4, 5 to 10 seconds\n\nNeed something different? Say so in the box below.",
+    "required": true,
+    "choices": [
+     {
+      "value": "Main graphic / key art",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Social graphics",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Stage / lobby screen slides",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Invite cards / print",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Video bumper / motion",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Other (explain below)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "438949958",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Sizes, print specs, or text that must appear",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "885770293",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Inspiration or reference links",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "970029299",
+    "type": "PAGE_BREAK",
+    "title": "Last thing",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "2036163935",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Anything else we should know?",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   }
+  ]
+ },
+ "feedback": {
+  "title": "Calvary Design Feedback",
+  "description": "Tell the designer what to change. List everything in this one message so the designer gets it as a single round.",
+  "items": [
+   {
+    "id": "2026755374",
+    "type": "TEXT",
+    "title": "Request ID",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "858947018",
+    "type": "TEXT",
+    "title": "Your email",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1114865669",
+    "type": "MULTIPLE_CHOICE",
+    "title": "What kind of change is this?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Fixing a mistake (typo, date, time, name)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Changing the design (look, layout, photos, colors)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Adding or removing something",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "83521916",
+    "type": "PARAGRAPH_TEXT",
+    "title": "What needs to change? (list everything in this one message)",
+    "help": "Be specific: where on the design, and what it should say or look like instead. Add links to any photos or files.",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   }
+  ]
+ },
+ "change": {
+  "title": "Calvary Communications: Change Request",
+  "description": "Use this if something changed after you submitted a request. Your request ID is in your confirmation email.",
+  "items": [
+   {
+    "id": "1281024087",
+    "type": "TEXT",
+    "title": "Request ID",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "65323416",
+    "type": "TEXT",
+    "title": "Your email",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "593544311",
+    "type": "CHECKBOX",
+    "title": "What is changing?",
+    "help": "",
+    "required": true,
+    "choices": [
+     {
+      "value": "Event or launch date",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Design details",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Communications details (audience, story, next step)",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Cancel this request",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     },
+     {
+      "value": "Other",
+      "nav": {
+       "type": "CONTINUE"
+      }
+     }
+    ],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "1430687478",
+    "type": "DATE",
+    "title": "New date (if the date is changing)",
+    "help": "",
+    "required": false,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   },
+   {
+    "id": "413677157",
+    "type": "PARAGRAPH_TEXT",
+    "title": "Tell us what changed",
+    "help": "",
+    "required": true,
+    "choices": [],
+    "other": false,
+    "nav": {
+     "type": "CONTINUE"
+    }
+   }
+  ]
+ }
+}

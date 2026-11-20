@@ -1,94 +1,52 @@
-# Communications Hub
+# Calvary Communications App
 
-An internal communications app for church staff. A ministry leader fills out **one form**, and the hub:
+One place where staff submit communications requests, track them, and give design feedback, and where the designer works from a queue.
 
-1. **Builds a timeline** by working back from the event date. Each deliverable they pick (graphics, social, print, video and so on) adds its own production steps. Due dates skip non-work days, and short-notice requests are **compressed proportionally and flagged RUSH**.
-2. **Assigns every task based on who submitted it.** Review steps go to the submitter, follow-ups go to *their* assistant, sign-off goes to *their* supervisor (skipped if they don't have one), and production work goes to whoever holds the role. If two designers share the work, new requests go to the less-busy one.
-3. **Sends the designer a complete creative brief.** It includes the copy, design notes, deadlines, attachments and a shared Drive folder for final files. *Reply* reaches the submitter directly.
-4. **Keeps work moving.** Everyone gets an email with their tasks. When someone marks a step done, the owner of the next step gets a "You're up" email. Every Monday at 7am, each person gets a digest of overdue tasks and tasks due that week.
+**This app is a front end for the existing Communications Hub (the Google Sheet and its Apps Script automation). It does not replace it.**
 
-Staff use four views: **New Request** (with a live preview of the timeline as they fill it out), **My Tasks**, **All Requests** and **Team Timeline** (everyone's open work, week by week, filterable by person).
+- **New requests are submitted through the real Google Form.** The hub's existing automation runs exactly as before: tiers, runway checks, timelines, Google Tasks, the master calendar, Drive folders and the designer brief.
+- **The app never edits the hub spreadsheet.** It requests read-only access to Sheets.
+- **The form screens are built live from the Google Forms.** Questions, required fields, sections and branching all come from the forms, so editing a form updates the app automatically.
 
-It runs entirely inside your Google Workspace: a Google Sheet is the database, and Apps Script serves the app. There is nothing to host or pay for, and staff sign in with their church Google accounts.
+## What people see
 
----
+| Screen | Who | What it does |
+|---|---|---|
+| **Home** | Everyone | Dashboard numbers (overdue, due this week, waiting for review, designer load, Level 1 Sprints used vs. cap), *my next tasks*, *my open requests*. Admins also see requests waiting for review. |
+| **New Request** | Everyone | The request form with its branching (event promotion / sermon series / design only), runway guidance, a "weeks of notice" check, and file attachments. The email is filled in from the person's Google sign-in. |
+| **My Tasks** | Everyone | Timeline tasks for the signed-in person: tasks assigned to them by name, plus tasks whose Owner is *Michael*, *Designer*, *Pastor*, or *Ministry Leader* (that request's submitter). |
+| **My Requests** | Everyone | Everything they've submitted, with tier, status, design state and progress. |
+| **Request page** | Everyone | All details, flags (e.g. COMPRESSED), the message to the requester, the feedback log, tasks and a visual timeline. Actions: **Request design changes** (feedback form), **Something changed** (change form), **Open Drive folder**, **Upload files** (straight into the request's Design Folder). |
+| **Design Queue** | Designer and admin | Open design work sorted by date, filtered to the designer or in-house (based on *Designer handles*), with rounds and the next deadline. |
+| **All Requests / Timeline** | Everyone | Searchable list of requests, and every open task grouped by week with a filter by person. |
 
-## One-time setup (about 15 minutes)
+The app also works on phones.
 
-### 1. Create the spreadsheet and script
-1. Create a new Google Sheet named **Communications Hub**. Use the account that should own the system and send its emails, such as a comms@ account.
-2. Open **Extensions → Apps Script**.
-3. Recreate each file in `src/` in the editor, with the same name, and paste in its contents:
-   - Script files (`+` → *Script*): `Code`, `Config`, `Db`, `Notify`, `Setup`, `Timeline`. The editor adds the `.gs` extension itself.
-   - HTML files (`+` → *HTML*): `Index`, `App`, `Styles`.
-   - `appsscript.json`: first turn on ⚙ *Project Settings → Show "appsscript.json" manifest file*, then paste it in. Change `timeZone` if you are not in US Eastern time.
+## Setup (about 10 minutes)
 
-   *Prefer the command line?* Install [clasp](https://github.com/google/clasp), copy `.clasp.json.example` to `.clasp.json`, add your Script ID, and run `clasp push`.
+1. **Add two rows to the hub's Config tab** (column A = setting, column B = value):
+   - `Design feedback form edit link`: the edit URL of the *Calvary Design Feedback* form
+   - `Change form edit link`: the edit URL of the *Change Request* form
 
-### 2. Run setup
-In the Apps Script editor, choose the **`setup`** function in the toolbar and click **Run**, then approve the permissions. Setup creates these tabs:
+   (`Form edit link` is already there.) An edit URL looks like `https://docs.google.com/forms/d/…/edit`. Open the form and copy the address bar.
+2. **Create the app.** Go to [script.google.com](https://script.google.com), choose **New project**, and name it *Communications App*. Signed in as the account that owns the hub, create these files with the same names and paste in the contents of `src/`:
+   - Script files: `Code`, `Config`, `Data`, `FormLogic`, `Forms`
+   - HTML files: `Index`, `App`, `Styles`
+   - `appsscript.json`: turn on *Project Settings → Show "appsscript.json"* first
 
-| Tab | What it's for |
-|---|---|
-| **Settings** | App name, work days, minimum notice (default 42 days), fallback person, admins, digest on/off |
-| **Team** | Everyone who uses the hub, plus their role, ministry, assistant and approver |
-| **Task Templates** | Your production playbook: each deliverable's steps, lead times and owners |
-| **Requests** / **Tasks** | Filled in by the app. You can view and filter them, but avoid editing the ID columns. |
+   (Or use [clasp](https://github.com/google/clasp): copy `.clasp.json.example` to `.clasp.json`, add the Script ID, then run `clasp push`.)
+3. **Deploy it.** Choose **Deploy → New deployment → Web app**, set *Execute as* to **Me** and *Who has access* to **Anyone within Calvary**, then approve the permissions.
+4. **Run one test request.** Submit a request in the app, then check that the hub behaves as it does for a normal form submission (new row, timeline, emails). Cancel the test request afterwards.
+5. Share the web app link with staff.
 
-It also creates a Drive folder for attachments and schedules the Monday digest.
+`HUB_SPREADSHEET_ID` in `src/Config.gs` points at the hub. Every other setting is read from the hub's Config tab, including brand colors and fonts, designer and pastor emails, the sprint cap, revision rounds and the Drive parent folder.
 
-### 3. Add your real staff on the **Team** tab
-Replace the `@example.org` sample rows. The hub never emails `@example.org` addresses, so testing is safe.
-
-| Column | Notes |
-|---|---|
-| Role | Must match the template **Assignee** names: `Designer`, `Communications Director`, `Social Media`, `Web`, `Video`. Leaders can be `Leadership` or anything else. |
-| Assistant Email | Gets that leader's "assistant" tasks, such as distributing flyers and sending the recap. If blank, the task goes to the leader. |
-| Approver Email | Gets the "Supervisor sign-off" task on that leader's requests. **Leave this blank for senior leaders who don't need approval.** |
-| Active | Set to `No` when someone leaves. |
-
-Communications Directors are automatically admins. Put anyone else who should be able to update any task in **Settings → Admin Emails**.
-
-### 4. Deploy the app
-**Deploy → New deployment → ⚙ Web app**
-- *Execute as:* **Me**
-- *Who has access:* **Anyone within [your organization]**
-
-Copy the web app URL and share it with staff (it's also under the **Comms Hub → Open the app** menu in the sheet). After changing code later, use **Deploy → Manage deployments → Edit → New version** so the URL stays the same.
-
----
-
-## Customizing the workflow (no code needed)
-
-Edit the **Task Templates** tab:
-
-- **Deliverable**: the checkbox name on the form. Add a new deliverable name and it appears on the form automatically. `Every Request` rows are added to all requests.
-- **Step**: the order within a deliverable. When step 1 is completed, the owner of step 2 gets an email.
-- **Anchor / Offset Days**:
-  - `Event` with `-35` means 35 days before the event (moved to the previous work day).
-  - `Event` with `3` means 3 days after the event.
-  - `Submitted` with `2` means 2 work days after the form was submitted.
-- **Assignee**: `Submitter`, `Submitter's Assistant`, `Submitter's Approver`, or any **Role** from the Team tab. If nobody holds a role, the task goes to **Settings → Fallback Assignee Email**, or to the Communications Director if that is blank.
-
-Other settings: **Work Days** (for example `Tue, Wed, Thu, Fri` if Monday is your day off) and **Minimum Lead Days**.
-
----
-
-## For developers
-
-```
-src/          Apps Script source (what gets deployed)
-  Timeline.gs   pure scheduling + assignment logic (unit tested)
-  Code.gs       web app entry + API used by the front end
-  Notify.gs     all emails (submit confirmation, assignments, designer brief, next step, weekly digest)
-  Db.gs         sheet-as-table helpers
-  Config.gs     sheet schemas + default seed data
-  Setup.gs      setup(), triggers, spreadsheet menu
-  Index/App/Styles.html   front end (vanilla JS, no build step)
-tests/        Node tests, run against mocked Google services
-```
+## Development
 
 ```bash
-npm test          # unit + end-to-end tests (mocked SpreadsheetApp, MailApp, DriveApp…)
+npm test          # tests run the real server code against mocked Google services
+                  # (forms in tests/fixtures/forms.json mirror the live forms)
 npm run preview   # renders the real UI in headless Chromium → ./preview/*.png
 ```
+
+The tests also check that the app never writes to the spreadsheet: the mock throws on any write.

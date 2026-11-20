@@ -3,16 +3,31 @@
 <head>
   <base target="_top">
   <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=<?= brand.headerFont.replace(/ /g, '+') ?>:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand: <?= brand.headerColor ?>;
+      --brand-ink: <?= brand.headerTextColor ?>;
+      --accent: <?= brand.accent ?>;
+      --body-font: "<?= brand.font ?>", Georgia, serif;
+      --head-font: "<?= brand.headerFont ?>", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+  </style>
   <?!= include('Styles'); ?>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand" id="appName">Communications Hub</div>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-view="new">New Request</button>
+    <div class="brand"><?= brand.headerText ?></div>
+    <button class="menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="home">Home</button>
+      <button class="tab" data-view="new">New Request</button>
       <button class="tab" data-view="tasks">My Tasks <span class="badge" id="taskBadge" hidden></span></button>
-      <button class="tab" data-view="requests">All Requests</button>
-      <button class="tab" data-view="timeline">Team Timeline</button>
+      <button class="tab" data-view="mine">My Requests</button>
+      <button class="tab" data-view="design" id="designTab" hidden>Design Queue</button>
+      <button class="tab" data-view="all">All Requests</button>
+      <button class="tab" data-view="timeline">Timeline</button>
     </nav>
     <div class="who" id="who"></div>
   </header>
@@ -20,101 +35,83 @@
   <main>
     <div id="notice" class="notice" hidden></div>
 
-    <!-- NEW REQUEST -->
-    <section class="view active" id="view-new">
+    <section class="view active" id="view-home"><div id="home"><div class="spinner">Loading…</div></div></section>
+
+    <section class="view" id="view-new">
       <div class="layout-2col">
-        <form id="requestForm" class="card" novalidate>
-          <h2>Communications request</h2>
-          <p class="muted">Tell us what's happening. We'll build the timeline, assign the tasks and send the brief to our designer.</p>
-
-          <fieldset>
-            <legend>The basics</legend>
-            <label>Title of event or initiative *<input name="title" required maxlength="200" placeholder="e.g. Fall Women's Retreat"></label>
-            <div class="row">
-              <label>Event / launch date *<input type="date" name="eventDate" required></label>
-              <label>Time<input name="eventTime" placeholder="e.g. 6:30–8:30 PM"></label>
-            </div>
-            <div class="row">
-              <label>Ministry<select name="ministry" id="ministrySelect"><option value="">—</option></select></label>
-              <label>Location<input name="location" placeholder="e.g. Main Auditorium"></label>
-            </div>
-            <label>Who is this for?<input name="audience" placeholder="e.g. Women 18+, parents of 5th graders"></label>
-          </fieldset>
-
-          <fieldset>
-            <legend>What do you need? *</legend>
-            <div id="deliverables" class="checks"></div>
-          </fieldset>
-
-          <fieldset>
-            <legend>The message</legend>
-            <label>Description<textarea name="description" rows="3" placeholder="What is it, and why should people care?"></textarea></label>
-            <label>Key message / exact copy<textarea name="keyMessage" rows="3" placeholder="Headline, dates, prices — exactly as it should appear"></textarea></label>
-            <div class="row">
-              <label>Call to action<input name="callToAction" placeholder="e.g. Register by Oct 1"></label>
-              <label>Registration / link<input name="link" type="url" placeholder="https://"></label>
-            </div>
-            <label>Contact for questions<input name="contact" placeholder="Name, email or phone"></label>
-          </fieldset>
-
-          <fieldset>
-            <legend>For the designer</legend>
-            <label>Design notes<textarea name="designNotes" rows="3" placeholder="Look & feel, colors, sizes, examples you like, logos to include"></textarea></label>
-            <label>Attachments (logos, photos, examples — 10 MB each)<input type="file" id="files" multiple></label>
-          </fieldset>
-
-          <div class="actions">
-            <button type="submit" class="primary" id="submitBtn">Submit request</button>
-          </div>
-        </form>
-
+        <div class="card"><div id="requestForm"><div class="spinner">Loading the request form…</div></div></div>
         <aside class="card sticky">
-          <h3>Your timeline</h3>
-          <div id="preview" class="muted">Pick a date and what you need to see your timeline.</div>
+          <h3>Before you submit</h3>
+          <div class="guide">
+            <p><b>One Story + One Next Step.</b> Every request is reviewed, given a tier, and scheduled.</p>
+            <table class="runway">
+              <tr><td>Level 1</td><td>12+ weeks</td></tr>
+              <tr><td>Level 2 &amp; 3</td><td>5–7 weeks</td></tr>
+              <tr><td>Level 4</td><td>3 weeks</td></tr>
+              <tr><td>Sermon series</td><td>10 weeks</td></tr>
+              <tr><td>Design only</td><td>3 weeks</td></tr>
+            </table>
+            <p class="muted">Need it sooner? Submit anyway and say so. Rushed requests may get a lighter plan.</p>
+            <div id="runwayNote"></div>
+          </div>
         </aside>
       </div>
     </section>
 
-    <!-- MY TASKS -->
     <section class="view" id="view-tasks">
       <div class="card">
-        <div class="card-head">
-          <h2>My tasks</h2>
-          <label class="inline"><input type="checkbox" id="showDone"> Show completed</label>
-        </div>
+        <div class="card-head"><h2>My tasks</h2><label class="inline"><input type="checkbox" id="showDone"> Show completed</label></div>
         <div id="taskList"></div>
       </div>
     </section>
 
-    <!-- ALL REQUESTS -->
-    <section class="view" id="view-requests">
+    <section class="view" id="view-mine">
+      <div class="card"><div class="card-head"><h2>My requests</h2></div><div id="mineList"></div></div>
+    </section>
+
+    <section class="view" id="view-design">
       <div class="card">
         <div class="card-head">
-          <h2>All requests</h2>
-          <input type="search" id="requestSearch" placeholder="Search title, ministry, person…">
+          <h2>Design queue</h2>
+          <div class="seg" id="designFilter">
+            <button data-f="" class="on">All</button><button data-f="designer" id="designerFilterBtn">Designer</button><button data-f="in-house">In-house</button>
+          </div>
         </div>
-        <div id="requestList"></div>
+        <div id="designList"></div>
       </div>
     </section>
 
-    <!-- TEAM TIMELINE -->
-    <section class="view" id="view-timeline">
+    <section class="view" id="view-all">
       <div class="card">
         <div class="card-head">
-          <h2>Team timeline</h2>
-          <select id="personFilter"><option value="">Everyone</option></select>
+          <h2>All requests</h2>
+          <input type="search" id="allSearch" placeholder="Search event, ministry, person, tier…">
         </div>
+        <div id="allList"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-timeline">
+      <div class="card">
+        <div class="card-head"><h2>Team timeline</h2><select id="personFilter"><option value="">Everyone</option></select></div>
         <div id="timelineList"></div>
       </div>
     </section>
 
-    <!-- REQUEST DETAIL -->
     <section class="view" id="view-detail">
       <button class="link" id="backBtn">← Back</button>
       <div id="detail"></div>
     </section>
   </main>
 
+  <div class="modal" id="modal" hidden>
+    <div class="modal-box card">
+      <button class="modal-x" id="modalClose" aria-label="Close">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script><?!= formLogicSource() ?></script>
   <?!= include('App'); ?>
 </body>
 </html>

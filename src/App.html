@@ -2,52 +2,47 @@
 (function () {
   'use strict';
 
-  var state = { boot: null, tasks: [], requests: [], timeline: [], previewTimer: null, lastView: 'new' };
+  var S = { boot: null, lastView: 'home', tasks: [], all: [], timeline: [], design: null, designFilter: '' };
 
-  /* ---------- helpers ---------- */
+  /* ---------------- helpers ---------------- */
   function $(sel) { return document.querySelector(sel); }
-  function el(tag, attrs, children) {
-    var node = document.createElement(tag);
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (k) {
-      if (k === 'class') node.className = attrs[k];
-      else if (k === 'text') node.textContent = attrs[k];
-      else if (k.indexOf('on') === 0) node.addEventListener(k.slice(2), attrs[k]);
-      else if (attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== false) node.setAttribute(k, attrs[k]);
+      var v = attrs[k];
+      if (v === undefined || v === null || v === false) return;
+      if (k === 'class') n.className = v;
+      else if (k === 'text') n.textContent = v;
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v === true ? '' : v);
     });
-    (children || []).forEach(function (c) {
+    (kids || []).forEach(function (c) {
       if (c === null || c === undefined || c === false) return;
-      node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+      n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
     });
-    return node;
+    return n;
   }
-  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); return node; }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+  function spinner(n, msg) { clear(n).appendChild(el('div', { class: 'spinner', text: msg || 'Loading…' })); }
 
   function api(name) {
     var args = Array.prototype.slice.call(arguments, 1);
     return new Promise(function (resolve, reject) {
-      var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) {
+      var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) {
         reject(e && e.message ? e : new Error(String(e)));
       });
-      runner[name].apply(runner, args);
+      r[name].apply(r, args);
     });
   }
 
   function parseDate(iso) { var p = String(iso).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
-  function pretty(iso) {
-    if (!iso) return '';
-    return parseDate(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  function pretty(iso, withYear) {
+    if (!iso) return '—';
+    var o = { weekday: 'short', month: 'short', day: 'numeric' };
+    if (withYear || iso.slice(0, 4) !== S.boot.today.slice(0, 4)) o.year = 'numeric';
+    return parseDate(iso).toLocaleDateString(undefined, o);
   }
-  function daysFromToday(iso) {
-    return Math.round((parseDate(iso) - parseDate(state.boot.today)) / 86400000);
-  }
-  function duePill(task) {
-    if (task.status === 'Done') return el('span', { class: 'pill done', text: 'Done' });
-    var d = daysFromToday(task.dueDate);
-    if (d < 0) return el('span', { class: 'pill overdue', text: (-d) + 'd overdue' });
-    if (d === 0) return el('span', { class: 'pill soon', text: 'Due today' });
-    if (d <= 3) return el('span', { class: 'pill soon', text: 'In ' + d + 'd' });
-    return el('span', { class: 'pill', text: 'In ' + d + 'd' });
-  }
+  function daysAway(iso) { return Math.round((parseDate(iso) - parseDate(S.boot.today)) / 86400000); }
 
   function notice(msg, kind) {
     var n = $('#notice');
@@ -55,300 +50,599 @@
     n.textContent = msg;
     n.hidden = false;
     window.scrollTo(0, 0);
-    if (kind !== 'err') setTimeout(function () { n.hidden = true; }, 8000);
+    clearTimeout(notice.t);
+    if (kind !== 'err') notice.t = setTimeout(function () { n.hidden = true; }, 10000);
   }
   function fail(e) { notice(e.message || String(e), 'err'); }
 
-  /* ---------- navigation ---------- */
-  function show(view) {
-    document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + view); });
-    document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.view === view); });
-    if (view !== 'detail') state.lastView = view;
-    if (view === 'tasks') loadTasks();
-    if (view === 'requests') loadRequests();
-    if (view === 'timeline') loadTimeline();
+  function tierPill(tier) {
+    if (!tier) return null;
+    var t = tier.toLowerCase();
+    var cls = /level 1/.test(t) ? 'l1' : /level 2/.test(t) ? 'l2' : /level 3/.test(t) ? 'l3' : /level 4/.test(t) ? 'l4' : /series/.test(t) ? 'series' : 'design';
+    return el('span', { class: 'pill tier ' + cls, text: tier });
   }
-  document.querySelectorAll('.tab').forEach(function (t) {
-    t.addEventListener('click', function () { show(t.dataset.view); });
-  });
-  $('#backBtn').addEventListener('click', function () { show(state.lastView); });
-
-  /* ---------- boot ---------- */
-  api('apiBootstrap').then(function (boot) {
-    state.boot = boot;
-    $('#appName').textContent = boot.appName;
-    $('#who').textContent = boot.user.name + (boot.user.role ? ' · ' + boot.user.role : '');
-    if (!boot.user.onTeam) notice("You're not on the Team list yet, so tasks for you will use your email. Ask the communications director to add you.", 'warn');
-
-    var ms = $('#ministrySelect');
-    boot.ministries.forEach(function (m) { ms.appendChild(el('option', { value: m, text: m })); });
-    if (boot.user.ministry) ms.value = boot.user.ministry;
-
-    var box = $('#deliverables');
-    boot.deliverables.forEach(function (d) {
-      box.appendChild(el('label', { class: 'check' }, [el('input', { type: 'checkbox', name: 'deliverables', value: d, onchange: schedulePreview }), d]));
-    });
-
-    var dateInput = document.querySelector('[name=eventDate]');
-    dateInput.min = state.boot.today;
-    dateInput.addEventListener('change', schedulePreview);
-
-    refreshTaskBadge();
-    google.script.url.getLocation(function (loc) {
-      if (loc.parameter && loc.parameter.request) openRequest(loc.parameter.request);
-    });
-  }).catch(fail);
-
-  /* ---------- new request ---------- */
-  function selectedDeliverables() {
-    return Array.prototype.map.call(document.querySelectorAll('[name=deliverables]:checked'), function (c) { return c.value; });
+  function statusPill(status) {
+    if (!status) return null;
+    var s = status.toLowerCase();
+    var cls = /done|approved/.test(s) ? 'ok' : /needs/.test(s) ? 'soon' : /declined|cancel/.test(s) ? '' : 'blue';
+    return el('span', { class: 'pill ' + cls, text: status });
   }
-
-  function schedulePreview() {
-    clearTimeout(state.previewTimer);
-    state.previewTimer = setTimeout(renderPreview, 300);
+  function duePill(t) {
+    if (t.done) return el('span', { class: 'pill ok', text: 'Done' });
+    if (!t.dueDate) return null;
+    var d = daysAway(t.dueDate);
+    if (d < 0) return el('span', { class: 'pill overdue', text: (-d) + 'd overdue' });
+    if (d === 0) return el('span', { class: 'pill soon', text: 'Due today' });
+    if (d <= 3) return el('span', { class: 'pill soon', text: 'In ' + d + 'd' });
+    return el('span', { class: 'pill', text: 'In ' + d + 'd' });
   }
-
-  function renderPreview() {
-    var date = document.querySelector('[name=eventDate]').value;
-    var dels = selectedDeliverables();
-    var box = $('#preview');
-    if (!date || !dels.length) { clear(box).appendChild(document.createTextNode('Pick a date and what you need to see your timeline.')); return; }
-    clear(box).appendChild(el('div', { class: 'spinner', text: 'Building timeline…' }));
-    api('apiPreviewTimeline', date, dels).then(function (p) {
-      clear(box);
-      if (p.rush) {
-        box.appendChild(el('div', { class: 'notice err' }, [
-          el('b', { text: 'Rush request. ' }),
-          'You are giving ' + p.leadDays + ' days of notice; our standard is ' + state.boot.minLeadDays +
-          '. Some deadlines have been compressed — the communications team will follow up.'
-        ]));
-      }
-      box.appendChild(timelineList(p.items, date));
-    }).catch(function (e) { clear(box).appendChild(el('div', { class: 'notice err', text: e.message })); });
-  }
-
-  function timelineList(items, eventDate) {
-    var ul = el('ul', { class: 'tl' });
-    var eventShown = false;
-    function eventLi() {
-      return el('li', { class: 'event' }, [el('div', { class: 'date', text: pretty(eventDate) }), el('div', { class: 'what', text: 'Event / launch day' })]);
-    }
-    items.forEach(function (t) {
-      if (!eventShown && eventDate && t.dueDate > eventDate) { ul.appendChild(eventLi()); eventShown = true; }
-      ul.appendChild(el('li', { class: (t.rush ? 'rush ' : '') + (t.status === 'Done' ? 'done' : '') }, [
-        el('div', { class: 'date' }, [pretty(t.dueDate), t.rush ? ' ' : null, t.rush ? el('span', { class: 'pill rush', text: 'RUSH' }) : null]),
-        el('div', { class: 'what', text: t.task }),
-        el('div', { class: 'meta', text: t.deliverable + ' · ' + t.assigneeName + (t.assigneeRole ? ' (' + t.assigneeRole + ')' : '') })
-      ]));
-    });
-    if (!eventShown && eventDate) ul.appendChild(eventLi());
-    return ul;
-  }
+  function link(href, text) { return href ? el('a', { href: href, target: '_blank', rel: 'noopener', text: text }) : null; }
 
   function readFiles(input) {
-    var files = Array.prototype.slice.call(input.files || []);
+    var files = Array.prototype.slice.call((input && input.files) || []);
     return Promise.all(files.map(function (f) {
-      if (f.size > 10 * 1024 * 1024) return Promise.reject(new Error('"' + f.name + '" is over 10 MB. Put a Drive link in the design notes instead.'));
-      return new Promise(function (resolve, reject) {
+      if (f.size > 10 * 1024 * 1024) return Promise.reject(new Error('"' + f.name + '" is over 10 MB. Share a Drive link instead.'));
+      return new Promise(function (res, rej) {
         var r = new FileReader();
-        r.onload = function () { resolve({ name: f.name, mimeType: f.type, data: String(r.result).split(',')[1] || '' }); };
-        r.onerror = function () { reject(new Error('Could not read ' + f.name)); };
+        r.onload = function () { res({ name: f.name, mimeType: f.type, data: String(r.result).split(',')[1] || '' }); };
+        r.onerror = function () { rej(new Error('Could not read ' + f.name)); };
         r.readAsDataURL(f);
       });
     }));
   }
 
-  $('#requestForm').addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    var form = ev.target;
-    var btn = $('#submitBtn');
-    var data = {};
-    ['title', 'eventDate', 'eventTime', 'ministry', 'location', 'audience', 'description', 'keyMessage', 'callToAction', 'link', 'contact', 'designNotes']
-      .forEach(function (k) { data[k] = form.elements[k].value; });
-    data.deliverables = selectedDeliverables();
+  /* ---------------- navigation ---------------- */
+  var loaders = {
+    home: loadHome, new: loadRequestForm, tasks: loadTasks, mine: loadMine,
+    design: loadDesign, all: loadAll, timeline: loadTimeline
+  };
+  function show(view) {
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-' + view); });
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.view === view); });
+    $('#tabs').classList.remove('open');
+    if (view !== 'detail') S.lastView = view;
+    if (loaders[view]) loaders[view]();
+  }
+  document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.view); }); });
+  $('#menuBtn').addEventListener('click', function () { $('#tabs').classList.toggle('open'); });
+  $('#backBtn').addEventListener('click', function () { show(S.lastView); });
+  $('#modalClose').addEventListener('click', closeModal);
+  $('#modal').addEventListener('click', function (e) { if (e.target.id === 'modal') closeModal(); });
+  function openModal() { $('#modal').hidden = false; return clear($('#modalBody')); }
+  function closeModal() { $('#modal').hidden = true; }
 
-    if (!data.title.trim()) return notice('Please give the request a title.', 'err');
-    if (!data.eventDate) return notice('Please choose an event or launch date.', 'err');
-    if (!data.deliverables.length) return notice('Choose at least one thing you need.', 'err');
+  /* ---------------- boot ---------------- */
+  api('apiBootstrap').then(function (b) {
+    S.boot = b;
+    $('#who').textContent = b.user.name || b.user.email;
+    $('#designTab').hidden = !(b.user.isAdmin || b.user.isDesigner);
+    $('#designerFilterBtn').textContent = b.designerName.split(' ')[0];
+    setBadge(b.myOpenTasks);
+    google.script.url.getLocation(function (loc) {
+      var p = loc.parameter || {};
+      if (p.request) openRequest(p.request);
+      else if (p.view && loaders[p.view]) show(p.view);
+      else loadHome();
+    });
+  }).catch(fail);
 
-    btn.disabled = true; btn.textContent = 'Submitting…';
-    readFiles($('#files')).then(function (files) {
-      data.files = files;
-      return api('apiSubmitRequest', data);
-    }).then(function (res) {
-      form.reset();
-      if (state.boot.user.ministry) $('#ministrySelect').value = state.boot.user.ministry;
-      clear($('#preview')).appendChild(document.createTextNode('Pick a date and what you need to see your timeline.'));
-      var msg = 'Request ' + res.requestId + ' submitted — ' + res.taskCount + ' tasks assigned and everyone has been emailed.';
-      if (res.rush) msg += ' It was flagged as a rush request.';
-      notice(msg, res.warnings && res.warnings.length ? 'warn' : 'ok');
-      refreshTaskBadge();
-      openRequest(res.requestId);
-    }).catch(fail).then(function () { btn.disabled = false; btn.textContent = 'Submit request'; });
-  });
+  function setBadge(n) { var b = $('#taskBadge'); b.hidden = !n; b.textContent = n; }
 
-  /* ---------- my tasks ---------- */
-  function refreshTaskBadge() {
-    api('apiMyTasks').then(function (tasks) {
-      state.tasks = tasks;
-      var open = tasks.filter(function (t) { return t.status !== 'Done' && daysFromToday(t.dueDate) <= 7; }).length;
-      var b = $('#taskBadge');
-      b.hidden = !open; b.textContent = open;
-    }).catch(function () {});
+  /* ---------------- home ---------------- */
+  function loadHome() {
+    if (!S.boot) return;
+    var box = $('#home');
+    spinner(box);
+    api('apiHome').then(function (h) {
+      clear(box);
+      var first = (S.boot.user.name || '').split(' ')[0];
+      box.appendChild(el('h2', { text: 'Welcome' + (first ? ', ' + first : '') }));
+      box.appendChild(el('p', { class: 'muted', text: 'Everything communications, in one place.' }));
+
+      var st = h.stats;
+      box.appendChild(el('div', { class: 'stats' }, [
+        stat(st.overdue, 'Overdue tasks (all)', st.overdue > 0),
+        stat(st.dueSoon, 'Tasks due in next 7 days'),
+        stat(st.needsReview, 'Requests waiting for review', st.needsReview > 0 && S.boot.user.isAdmin),
+        stat(st.designerOpen, 'Open designer tasks'),
+        stat(st.sprints + (st.sprintCap ? ' / ' + st.sprintCap : ''), 'Level 1 Sprints this year', st.sprintCap && st.sprints >= st.sprintCap)
+      ]));
+
+      var left = el('div', { class: 'card' }, [
+        el('div', { class: 'card-head' }, [el('h3', { text: 'My next tasks' }), el('button', { class: 'link', text: 'See all →', onclick: function () { show('tasks'); } })])
+      ]);
+      if (!h.myTasks.length) left.appendChild(el('div', { class: 'empty', text: 'Nothing on your plate. 🎉' }));
+      h.myTasks.forEach(function (t) { left.appendChild(taskRow(t, true)); });
+
+      var right = el('div', { class: 'card' }, [
+        el('div', { class: 'card-head' }, [el('h3', { text: 'My open requests' }), el('button', { class: 'primary', text: '+ New request', onclick: function () { show('new'); } })])
+      ]);
+      if (!h.myRequests.length) right.appendChild(el('div', { class: 'empty', text: 'No open requests.' }));
+      h.myRequests.forEach(function (r) { right.appendChild(requestRow(r)); });
+
+      box.appendChild(el('div', { class: 'home-grid' }, [left, right]));
+
+      if (h.reviewQueue.length) {
+        var rq = el('div', { class: 'card' }, [el('h3', { text: 'Waiting for your review' })]);
+        h.reviewQueue.forEach(function (r) { rq.appendChild(requestRow(r)); });
+        if (S.boot.links.hubSheet) rq.appendChild(el('p', { class: 'muted' }, ['Set tier and status on the ', link(S.boot.links.hubSheet, 'Requests tab'), '.']));
+        box.appendChild(rq);
+      }
+    }).catch(fail);
+  }
+  function stat(n, label, warn) {
+    return el('div', { class: 'stat' + (warn ? ' warn' : '') }, [el('div', { class: 'n', text: String(n) }), el('div', { class: 'l', text: label })]);
   }
 
+  /* ---------------- dynamic Google Form ---------------- */
+  /**
+   * Renders one of the hub's Google Forms with its branching.
+   * opts: { kind, requestId, submitLabel, withFiles, onDone(result) }
+   */
+  function renderForm(box, desc, opts) {
+    clear(box);
+    var answers = {};
+    var fieldsets = [];
+    var itemMeta = {};
+    var form = el('form', { novalidate: true });
+
+    if (opts.showIntro) {
+      form.appendChild(el('h2', { text: desc.title }));
+      if (desc.description) form.appendChild(el('div', { class: 'form-intro', text: firstParagraph(desc.description) }));
+    } else {
+      form.appendChild(el('h2', { text: desc.title }));
+    }
+
+    desc.sections.forEach(function (sec, si) {
+      var fs = el('fieldset', {});
+      if (si > 0) {
+        fs.appendChild(el('legend', { text: sec.title }));
+        if (sec.help) fs.appendChild(el('p', { class: 'section-help', text: sec.help }));
+      }
+      sec.items.forEach(function (it) {
+        itemMeta[it.id] = it;
+        fs.appendChild(renderItem(it, desc.prefill[it.id], answers, update));
+      });
+      fieldsets.push(fs);
+      form.appendChild(fs);
+    });
+
+    var fileInput = null;
+    if (opts.withFiles) {
+      fileInput = el('input', { type: 'file', multiple: true });
+      form.appendChild(el('fieldset', {}, [
+        el('legend', { text: 'Attachments' }),
+        el('div', { class: 'q' }, [
+          el('span', { class: 'qt', text: 'Files to include (optional, 10 MB each)' }),
+          el('div', { class: 'qh', text: 'Saved to a shared Drive folder; the link is added to your request.' }),
+          fileInput
+        ])
+      ]));
+    }
+
+    var btn = el('button', { type: 'submit', class: 'primary', text: opts.submitLabel || 'Submit' });
+    var hint = el('span', { class: 'muted' });
+    form.appendChild(el('div', { class: 'actions' }, [btn, hint]));
+    box.appendChild(form);
+
+    function update() {
+      var path = visibleSections(desc.sections, answers);
+      fieldsets.forEach(function (fs, i) { fs.hidden = path.indexes.indexOf(i) < 0; });
+      hint.textContent = path.complete ? '' : 'Answer the questions above to continue.';
+      btn.disabled = !path.complete;
+      if (opts.onChange) opts.onChange(answers, itemMeta);
+      return path;
+    }
+    update();
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var path = update();
+      var visible = {};
+      path.indexes.forEach(function (i) { desc.sections[i].items.forEach(function (it) { visible[it.id] = it; }); });
+      var missing = [];
+      form.querySelectorAll('.q.invalid').forEach(function (q) { q.classList.remove('invalid'); });
+      Object.keys(visible).forEach(function (id) {
+        var it = visible[id], v = answers[id];
+        var empty = v === undefined || (Array.isArray(v) ? !v.length : !String(v).trim());
+        if (it.required && empty) {
+          missing.push(it.title);
+          var q = form.querySelector('[data-q="' + id + '"]');
+          if (q) q.classList.add('invalid');
+        }
+      });
+      if (missing.length) {
+        var firstBad = form.querySelector('.q.invalid');
+        if (firstBad) firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        hint.textContent = 'Please fill in ' + missing.length + ' required question' + (missing.length > 1 ? 's' : '') + '.';
+        return;
+      }
+      var send = {};
+      Object.keys(visible).forEach(function (id) { if (answers[id] !== undefined) send[id] = answers[id]; });
+
+      btn.disabled = true; btn.textContent = 'Submitting…';
+      hint.textContent = opts.kind === 'request' ? 'This takes a few seconds while the hub builds your plan.' : '';
+      readFiles(fileInput).then(function (files) {
+        return api('apiSubmit', opts.kind, send, files, opts.requestId || '');
+      }).then(function (res) {
+        opts.onDone(res);
+      }).catch(function (e) {
+        btn.disabled = false; btn.textContent = opts.submitLabel || 'Submit';
+        hint.textContent = '';
+        fail(e);
+      });
+    });
+  }
+
+  function firstParagraph(s) { return String(s).split(/\n\s*\n/)[0]; }
+
+  function renderItem(it, pre, answers, onChange) {
+    var q = el('div', { class: 'q', 'data-q': it.id });
+    if (it.kind === 'header') {
+      q.appendChild(el('h3', { text: it.title }));
+      if (it.help) q.appendChild(el('div', { class: 'qh', text: it.help }));
+      return q;
+    }
+    q.appendChild(el('span', { class: 'qt' }, [it.title, it.required ? el('span', { class: 'req', text: ' *' }) : null]));
+    if (it.help) {
+      var h = el('div', { class: 'qh' + (it.help.length > 160 ? ' long' : ''), text: it.help });
+      if (it.help.length > 160) h.addEventListener('click', function () { h.classList.toggle('open'); });
+      q.appendChild(h);
+    }
+    function set(v) { answers[it.id] = v; q.classList.remove('invalid'); onChange(); }
+
+    if (it.kind === 'short' || it.kind === 'paragraph' || it.kind === 'date') {
+      var input = it.kind === 'paragraph' ? el('textarea', { rows: 3 }) : el('input', { type: it.kind === 'date' ? 'date' : 'text' });
+      if (pre) { input.value = pre.value; answers[it.id] = pre.value; if (pre.lock) input.readOnly = true; }
+      var weeks = it.kind === 'date' ? el('div', { class: 'weeks muted' }) : null;
+      input.addEventListener('input', function () {
+        if (weeks) weeks.textContent = weeksText(input.value);
+        set(input.value);
+      });
+      q.appendChild(input);
+      if (weeks) q.appendChild(weeks);
+    } else if (it.kind === 'dropdown') {
+      var sel = el('select', {}, [el('option', { value: '', text: 'Choose…' })].concat(it.choices.map(function (c) { return el('option', { value: c.value, text: c.value }); })));
+      sel.addEventListener('change', function () { set(sel.value || undefined); });
+      q.appendChild(sel);
+    } else if (it.kind === 'radio' || it.kind === 'checkbox') {
+      var multi = it.kind === 'checkbox';
+      var name = 'q' + it.id;
+      var grid = it.choices.length > 4 && it.choices.every(function (c) { return c.value.length < 40; });
+      var wrap = el('div', { class: 'opts' + (grid ? ' grid' : '') });
+      var otherText = it.other ? el('input', { type: 'text', placeholder: 'Other…' }) : null;
+      function collect() {
+        var vals = Array.prototype.filter.call(wrap.querySelectorAll('input[name="' + name + '"]'), function (x) { return x.checked; })
+          .map(function (x) { return x.value === '__other__' ? (otherText.value.trim() || '') : x.value; })
+          .filter(String);
+        set(multi ? vals : vals[0]);
+      }
+      it.choices.forEach(function (c) {
+        wrap.appendChild(el('label', { class: 'opt' }, [el('input', { type: multi ? 'checkbox' : 'radio', name: name, value: c.value, onchange: collect }), c.value]));
+      });
+      if (it.other) {
+        wrap.appendChild(el('label', { class: 'opt' }, [el('input', { type: multi ? 'checkbox' : 'radio', name: name, value: '__other__', onchange: collect }), otherText]));
+        otherText.addEventListener('input', collect);
+      }
+      q.appendChild(wrap);
+    }
+    return q;
+  }
+
+  function weeksText(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    var d = daysAway(iso);
+    if (d < 0) return 'That date has passed.';
+    var w = Math.floor(d / 7);
+    return d + ' days from today (' + (w ? w + ' week' + (w > 1 ? 's' : '') : 'under a week') + ').';
+  }
+
+  /* ---------------- new request ---------------- */
+  function loadRequestForm() {
+    var box = $('#requestForm');
+    if (box.dataset.loaded) return;
+    spinner(box, 'Loading the request form…');
+    api('apiForm', 'request', '').then(function (desc) {
+      box.dataset.loaded = '1';
+      renderForm(box, desc, {
+        kind: 'request', submitLabel: 'Submit request', withFiles: true, showIntro: true,
+        onChange: runwayHint,
+        onDone: function (res) {
+          box.dataset.loaded = '';
+          loadRequestForm();
+          if (res.requestId) {
+            notice('Request ' + res.requestId + ' submitted! Check your email for the confirmation and next steps.');
+            openRequest(res.requestId);
+          } else {
+            notice('Request submitted! The hub is still processing it. It will appear under My Requests in a minute, and you will get a confirmation email.', 'ok');
+            show('mine');
+          }
+        }
+      });
+    }).catch(function (e) { clear(box).appendChild(el('div', { class: 'notice err', text: e.message })); });
+  }
+
+  function runwayHint(answers, meta) {
+    var note = $('#runwayNote');
+    clear(note);
+    var dates = Object.keys(answers).filter(function (id) { return meta[id] && meta[id].kind === 'date' && answers[id]; });
+    if (!dates.length) return;
+    var d = daysAway(answers[dates[dates.length - 1]]);
+    if (d < 0) return;
+    var w = Math.floor(d / 7);
+    var tight = d < 21;
+    note.appendChild(el('div', { class: 'notice ' + (tight ? 'warn' : 'info'), text:
+      'You are giving ' + w + ' week' + (w === 1 ? '' : 's') + ' of notice.' + (tight ? ' That is shorter than any standard runway — the plan may be compressed.' : '') }));
+  }
+
+  /* ---------------- rows ---------------- */
+  function taskRow(t, showEvent) {
+    return el('div', { class: 'item clickable' + (t.done ? ' is-done' : ''), onclick: function () { openRequest(t.requestId); } }, [
+      el('div', {}, [el('div', { class: 'sub', text: pretty(t.dueDate) }), duePill(t)]),
+      el('div', {}, [
+        el('div', { class: 'title', text: t.task }),
+        el('div', { class: 'sub', text: [showEvent ? t.event : null, t.channel, showEvent ? null : t.assigneeName].filter(Boolean).join(' · ') }),
+        t.notes ? el('div', { class: 'sub', text: t.notes }) : null
+      ]),
+      el('div', { class: 'right' }, [tierPill(t.tier)])
+    ]);
+  }
+
+  function requestRow(r, extra) {
+    var pct = r.tasksTotal ? Math.round(100 * r.tasksDone / r.tasksTotal) : 0;
+    return el('div', { class: 'item clickable', onclick: function () { openRequest(r.requestId); } }, [
+      el('div', {}, [el('div', { class: 'sub', text: 'Event' }), el('div', { text: pretty(r.eventDate) })]),
+      el('div', {}, [
+        el('div', { class: 'title', text: r.title || r.requestId }),
+        el('div', { class: 'sub', text: [r.requestId, r.ministry, r.requester].filter(Boolean).join(' · ') }),
+        extra || null,
+        r.tasksTotal ? el('div', { class: 'progress', title: r.tasksDone + ' of ' + r.tasksTotal + ' tasks done' }, [el('div', { style: 'width:' + pct + '%' })]) : null
+      ]),
+      el('div', { class: 'right' }, [
+        tierPill(r.tier),
+        statusPill(r.status),
+        r.designState ? el('span', { class: 'pill blue', text: 'Design: ' + r.designState }) : null,
+        /compress/i.test(r.flags) ? el('span', { class: 'pill flag', text: 'Compressed', title: r.flags }) : null
+      ])
+    ]);
+  }
+
+  /* ---------------- my tasks ---------------- */
   function loadTasks() {
-    var box = clear($('#taskList'));
-    box.appendChild(el('div', { class: 'spinner', text: 'Loading…' }));
-    api('apiMyTasks').then(function (tasks) { state.tasks = tasks; renderTasks(); refreshTaskBadge(); }).catch(fail);
+    var box = $('#taskList');
+    spinner(box);
+    api('apiMyTasks').then(function (tasks) {
+      S.tasks = tasks;
+      setBadge(tasks.filter(function (t) { return !t.done; }).length);
+      renderTasks();
+    }).catch(fail);
   }
   $('#showDone').addEventListener('change', renderTasks);
-
   function renderTasks() {
     var box = clear($('#taskList'));
-    var showDone = $('#showDone').checked;
-    var list = state.tasks.filter(function (t) { return showDone || t.status !== 'Done'; });
+    var list = S.tasks.filter(function (t) { return $('#showDone').checked || !t.done; });
     if (!list.length) { box.appendChild(el('div', { class: 'empty', text: "You're all caught up. 🎉" })); return; }
     list.forEach(function (t) { box.appendChild(taskRow(t, true)); });
   }
 
-  function taskRow(t, showRequest) {
-    var select = el('select', {
-      class: 'status-select', title: 'Update status',
-      onclick: function (e) { e.stopPropagation(); },
-      onchange: function () {
-        select.disabled = true;
-        api('apiUpdateTask', t.taskId, select.value).then(function (updated) {
-          Object.assign(t, updated);
-          node.parentNode.replaceChild(taskRow(t, showRequest), node);
-          refreshTaskBadge();
-        }).catch(function (err) { select.value = t.status; select.disabled = false; fail(err); });
-      }
-    }, ['Not Started', 'In Progress', 'Done'].map(function (s) {
-      return el('option', { value: s, text: s, selected: s === t.status ? 'selected' : null });
-    }));
-
-    var node = el('div', { class: 'item clickable' + (t.status === 'Done' ? ' is-done' : ''), onclick: function () { openRequest(t.requestId); } }, [
-      el('div', {}, [el('div', { class: 'sub', text: pretty(t.dueDate) }), duePill(t)]),
-      el('div', {}, [
-        el('div', { class: 'title', text: t.task }),
-        el('div', { class: 'sub', text: (showRequest ? t.requestTitle + ' · ' + t.deliverable : t.deliverable + ' · ' + t.assigneeName) }),
-        t.notes ? el('div', { class: 'sub', text: t.notes }) : null
-      ]),
-      el('div', { class: 'item-actions' }, [t.rush ? el('span', { class: 'pill rush', text: 'RUSH' }) : null, select])
-    ]);
-    return node;
+  /* ---------------- requests ---------------- */
+  function loadMine() {
+    var box = $('#mineList');
+    spinner(box);
+    api('apiRequests', 'mine').then(function (list) {
+      clear(box);
+      if (!list.length) { box.appendChild(el('div', { class: 'empty', text: "You haven't submitted any requests yet." })); return; }
+      list.forEach(function (r) { box.appendChild(requestRow(r)); });
+    }).catch(fail);
   }
 
-  /* ---------- all requests ---------- */
-  function loadRequests() {
-    var box = clear($('#requestList'));
-    box.appendChild(el('div', { class: 'spinner', text: 'Loading…' }));
-    api('apiRequests').then(function (r) { state.requests = r; renderRequests(); }).catch(fail);
+  function loadAll() {
+    spinner($('#allList'));
+    api('apiRequests', 'all').then(function (list) { S.all = list; renderAll(); }).catch(fail);
   }
-  $('#requestSearch').addEventListener('input', renderRequests);
-
-  function renderRequests() {
-    var box = clear($('#requestList'));
-    var q = $('#requestSearch').value.trim().toLowerCase();
-    var list = state.requests.filter(function (r) {
-      return !q || [r.title, r.ministry, r.submitterName, r.requestId, r.deliverables].join(' ').toLowerCase().indexOf(q) >= 0;
+  $('#allSearch').addEventListener('input', renderAll);
+  function renderAll() {
+    var box = clear($('#allList'));
+    var q = $('#allSearch').value.trim().toLowerCase();
+    var list = S.all.filter(function (r) {
+      return !q || [r.title, r.ministry, r.requester, r.requestId, r.tier, r.status, r.mode].join(' ').toLowerCase().indexOf(q) >= 0;
     });
     if (!list.length) { box.appendChild(el('div', { class: 'empty', text: q ? 'No matches.' : 'No requests yet.' })); return; }
+    list.forEach(function (r) { box.appendChild(requestRow(r)); });
+  }
+
+  /* ---------------- design queue ---------------- */
+  function loadDesign() {
+    spinner($('#designList'));
+    api('apiDesignQueue').then(function (d) { S.design = d; renderDesign(); }).catch(fail);
+  }
+  document.querySelectorAll('#designFilter button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      S.designFilter = b.dataset.f;
+      document.querySelectorAll('#designFilter button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      renderDesign();
+    });
+  });
+  function renderDesign() {
+    var box = clear($('#designList'));
+    var list = S.design.items.filter(function (r) { return !S.designFilter || r.handledBy === S.designFilter; });
+    if (!list.length) { box.appendChild(el('div', { class: 'empty', text: 'The design queue is clear. 🎉' })); return; }
     list.forEach(function (r) {
-      var pct = r.total ? Math.round(100 * r.done / r.total) : 0;
-      box.appendChild(el('div', { class: 'item clickable', onclick: function () { openRequest(r.requestId); } }, [
-        el('div', {}, [el('div', { class: 'sub', text: 'Event' }), el('div', { text: pretty(r.eventDate) })]),
-        el('div', {}, [
-          el('div', { class: 'title', text: r.title }),
-          el('div', { class: 'sub', text: [r.requestId, r.ministry, r.submitterName].filter(Boolean).join(' · ') }),
-          el('div', { class: 'sub', text: r.deliverables }),
-          el('div', { class: 'progress', title: r.done + ' of ' + r.total + ' tasks done' }, [el('div', { style: 'width:' + pct + '%' })])
-        ]),
-        el('div', {}, [r.rush ? el('span', { class: 'pill rush', text: 'RUSH' }) : null, ' ', el('span', { class: 'pill ' + r.status, text: r.status })])
-      ]));
+      var next = r.designerTasks[0];
+      var extra = el('div', {}, [
+        el('div', { class: 'sub', text: r.designItems }),
+        el('div', { class: 'sub' }, [
+          r.handledBy === 'designer' ? S.boot.designerName : 'In-house',
+          r.designRound && r.designRound !== '0' ? ' · Round ' + r.designRound + (S.boot.includedRounds ? ' of ' + S.boot.includedRounds : '') : '',
+          next ? ' · Next: ' + next.task.slice(0, 70) + ' (' + pretty(next.dueDate) + ')' : ''
+        ])
+      ]);
+      box.appendChild(requestRow(r, extra));
     });
   }
 
-  /* ---------- team timeline ---------- */
+  /* ---------------- timeline ---------------- */
   function loadTimeline() {
-    var box = clear($('#timelineList'));
-    box.appendChild(el('div', { class: 'spinner', text: 'Loading…' }));
+    spinner($('#timelineList'));
     api('apiTeamTimeline').then(function (tasks) {
-      state.timeline = tasks;
-      var sel = $('#personFilter'), current = sel.value, people = {};
-      tasks.forEach(function (t) { people[t.assigneeEmail] = t.assigneeName; });
+      S.timeline = tasks;
+      var sel = $('#personFilter'), cur = sel.value, people = {};
+      tasks.forEach(function (t) { var k = t.assigneeEmail || t.owner; people[k] = t.assigneeName || t.owner; });
       clear(sel).appendChild(el('option', { value: '', text: 'Everyone' }));
       Object.keys(people).sort(function (a, b) { return people[a].localeCompare(people[b]); })
-        .forEach(function (e) { sel.appendChild(el('option', { value: e, text: people[e] })); });
-      sel.value = people[current] ? current : '';
+        .forEach(function (k) { sel.appendChild(el('option', { value: k, text: people[k] })); });
+      sel.value = people[cur] ? cur : (people[S.boot.user.email] && !cur ? '' : '');
       renderTimeline();
     }).catch(fail);
   }
   $('#personFilter').addEventListener('change', renderTimeline);
-
   function weekLabel(iso) {
-    var d = daysFromToday(iso);
-    if (d < 0) return 'Overdue';
-    var date = parseDate(iso);
-    var monday = new Date(date); monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-    return 'Week of ' + monday.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (daysAway(iso) < 0) return 'Overdue';
+    var d = parseDate(iso);
+    var mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return 'Week of ' + mon.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
-
   function renderTimeline() {
     var box = clear($('#timelineList'));
     var who = $('#personFilter').value;
-    var list = state.timeline.filter(function (t) { return !who || t.assigneeEmail === who; });
+    var list = S.timeline.filter(function (t) { return !who || (t.assigneeEmail || t.owner) === who; });
     if (!list.length) { box.appendChild(el('div', { class: 'empty', text: 'Nothing open. 🎉' })); return; }
     var last = null;
     list.forEach(function (t) {
       var label = weekLabel(t.dueDate);
       if (label !== last) { box.appendChild(el('div', { class: 'week-head', text: label })); last = label; }
-      box.appendChild(el('div', { class: 'item clickable', onclick: function () { openRequest(t.requestId); } }, [
-        el('div', {}, [el('div', { class: 'sub', text: pretty(t.dueDate) }), duePill(t)]),
-        el('div', {}, [el('div', { class: 'title', text: t.task }), el('div', { class: 'sub', text: t.requestTitle + ' · ' + t.deliverable })]),
-        el('div', {}, [t.rush ? el('span', { class: 'pill rush', text: 'RUSH' }) : null, ' ', el('span', { class: 'pill', text: t.assigneeName })])
-      ]));
+      var row = taskRow(t, true);
+      row.querySelector('.right').appendChild(el('span', { class: 'pill', text: t.assigneeName || t.owner }));
+      box.appendChild(row);
     });
   }
 
-  /* ---------- request detail ---------- */
+  /* ---------------- request detail ---------------- */
   function openRequest(id) {
     show('detail');
-    var box = clear($('#detail'));
-    box.appendChild(el('div', { class: 'spinner', text: 'Loading…' }));
-    api('apiRequestDetail', id).then(function (d) {
-      var r = d.request;
-      clear(box);
-      var fields = [
-        ['Submitted by', r.submitterName + ' · ' + r.submittedAt], ['Ministry', r.ministry],
-        ['Event date', pretty(r.eventDate) + (r.eventTime ? ' · ' + r.eventTime : '')], ['Location', r.location],
-        ['Audience', r.audience], ['Deliverables', r.deliverables], ['Description', r.description],
-        ['Key message / copy', r.keyMessage], ['Call to action', r.callToAction], ['Link', r.link],
-        ['Contact', r.contact], ['Design notes', r.designNotes]
-      ];
-      var dl = el('dl', { class: 'kv' });
-      fields.forEach(function (f) { if (f[1]) { dl.appendChild(el('dt', { text: f[0] })); dl.appendChild(el('dd', { text: f[1] })); } });
-      if (r.filesUrl) {
-        dl.appendChild(el('dt', { text: 'Files' }));
-        dl.appendChild(el('dd', {}, [el('a', { href: r.filesUrl, target: '_blank', rel: 'noopener', text: 'Open Drive folder' })]));
-      }
+    var box = $('#detail');
+    spinner(box);
+    api('apiRequestDetail', id).then(function (d) { renderDetail(box, d); }).catch(fail);
+  }
 
-      box.appendChild(el('div', { class: 'layout-2col' }, [
-        el('div', {}, [
-          el('div', { class: 'card' }, [
-            el('div', { class: 'card-head' }, [
-              el('div', {}, [el('h2', { text: r.title }), el('div', { class: 'muted', text: r.requestId })]),
-              el('div', {}, [r.rush ? el('span', { class: 'pill rush', text: 'RUSH' }) : null, ' ', el('span', { class: 'pill ' + r.status, text: r.status })])
-            ]),
-            dl
-          ]),
-          el('div', { class: 'card' }, [el('h3', { text: 'Tasks' })].concat(d.tasks.map(function (t) { return taskRow(t, false); })))
-        ]),
-        el('aside', { class: 'card sticky' }, [el('h3', { text: 'Timeline' }), timelineList(d.tasks, r.eventDate)])
+  function renderDetail(box, d) {
+    var r = d.request;
+    clear(box);
+    var series = /series/i.test(r.requestType);
+    var designOnly = /design/i.test(r.requestType) && !/promotion/i.test(r.requestType);
+    var fields = [
+      ['Requested by', r.requester + (r.submitted ? ' · ' + r.submitted.slice(0, 10) : '')],
+      ['Ministry', r.ministry],
+      [series ? 'Series launch' : designOnly ? 'Files needed by' : 'Event date', pretty(r.eventDate, true)],
+      ['Type', r.requestType],
+      ['Tier', r.tier + (r.suggestedTier && r.suggestedTier !== r.tier ? ' (suggested ' + r.suggestedTier + ')' : '')],
+      ['Mode', r.mode],
+      ['Who for', r.whoFor], ['Reach', r.reach], ['Bridge event', r.bridge],
+      ['Next step', [r.nextStepType, r.oneNextStep].filter(Boolean).join(' — ')],
+      ['Story', r.story],
+      ['Time & location', r.timeLocation], ['Registration (PCO)', r.registration], ['Details', r.details],
+      ['Series weeks', r.seriesWeeks], ['Weekly titles', r.weeklyTitles], ['Visual direction', r.visualDirection],
+      ['Design items', r.designItems], ['Design specs', r.designSpecs], ['Inspiration', r.inspiration],
+      ['Anything else', r.anythingElse], ['Change requests', r.changeRequests], ['Results', r.results]
+    ];
+    var dl = el('dl', { class: 'kv' });
+    fields.forEach(function (f) { if (f[1]) { dl.appendChild(el('dt', { text: f[0] })); dl.appendChild(el('dd', { text: f[1] })); } });
+
+    var actions = el('div', { class: 'btn-row' });
+    if (d.can.feedback && /^yes$/i.test(r.needsDesign) && S.boot.forms.feedback) {
+      actions.appendChild(el('button', { class: 'secondary', text: 'Request design changes', onclick: function () { formModal('feedback', r, 'Send feedback'); } }));
+    }
+    if (d.can.change && S.boot.forms.change) {
+      actions.appendChild(el('button', { class: 'secondary', text: 'Something changed', onclick: function () { formModal('change', r, 'Send change'); } }));
+    }
+    if (r.designFolder) actions.appendChild(el('a', { class: 'secondary', href: r.designFolder, target: '_blank', rel: 'noopener', text: 'Open Drive folder' }));
+    if (d.can.upload && r.designFolder) actions.appendChild(uploader(r));
+
+    var head = el('div', { class: 'card' }, [
+      el('div', { class: 'card-head' }, [
+        el('div', {}, [el('h2', { text: r.title }), el('div', { class: 'muted', text: r.requestId })]),
+        el('div', { class: 'right', style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
+          tierPill(r.tier), statusPill(r.status),
+          r.designState ? el('span', { class: 'pill blue', text: 'Design: ' + r.designState + (r.designRound && r.designRound !== '0' ? ' · R' + r.designRound : '') }) : null
+        ])
+      ]),
+      r.flags ? el('div', { class: 'notice warn', text: r.flags }) : null,
+      r.messageToRequester ? el('div', { class: 'notice info', text: r.messageToRequester }) : null,
+      dl,
+      actions
+    ]);
+
+    var left = el('div', {}, [head]);
+    if (r.feedbackLog || r.heldFeedback) {
+      left.appendChild(el('div', { class: 'card' }, [
+        el('h3', { text: 'Design feedback' }),
+        r.feedbackLog ? el('pre', { class: 'log', text: r.feedbackLog }) : null,
+        r.heldFeedback ? el('div', {}, [el('h3', { text: 'Held feedback', style: 'margin-top:14px' }), el('pre', { class: 'log', text: r.heldFeedback })]) : null
       ]));
-    }).catch(fail);
+    }
+    var tasksCard = el('div', { class: 'card' }, [el('h3', { text: 'Tasks' })]);
+    if (!d.tasks.length) tasksCard.appendChild(el('div', { class: 'empty', text: 'The plan is built once the request is approved.' }));
+    d.tasks.forEach(function (t) {
+      var row = taskRow(t, false);
+      row.classList.remove('clickable');
+      row.onclick = null;
+      tasksCard.appendChild(row);
+    });
+    left.appendChild(tasksCard);
+
+    box.appendChild(el('div', { class: 'layout-2col' }, [
+      left,
+      el('aside', { class: 'card sticky' }, [el('h3', { text: 'Timeline' }), timelineList(d.tasks, r.eventDate)])
+    ]));
+  }
+
+  function timelineList(tasks, eventDate) {
+    var ul = el('ul', { class: 'tl' });
+    var shown = false;
+    function eventLi() { return el('li', { class: 'event' }, [el('div', { class: 'date', text: pretty(eventDate) }), el('div', { class: 'what', text: 'Event / launch day' })]); }
+    if (!tasks.length) return el('div', { class: 'muted', text: 'No timeline yet.' });
+    tasks.forEach(function (t) {
+      if (!shown && eventDate && t.dueDate > eventDate) { ul.appendChild(eventLi()); shown = true; }
+      var late = !t.done && t.dueDate && daysAway(t.dueDate) < 0;
+      ul.appendChild(el('li', { class: t.done ? 'done' : late ? 'late' : '' }, [
+        el('div', { class: 'date', text: pretty(t.dueDate) + (late ? ' · overdue' : '') }),
+        el('div', { class: 'what', text: t.task }),
+        el('div', { class: 'meta', text: [t.channel, t.assigneeName || t.owner].filter(Boolean).join(' · ') })
+      ]));
+    });
+    if (!shown && eventDate) ul.appendChild(eventLi());
+    return ul;
+  }
+
+  function uploader(r) {
+    var input = el('input', { type: 'file', multiple: true, style: 'display:none' });
+    var btn = el('button', { class: 'secondary', text: 'Upload files', onclick: function () { input.click(); } });
+    input.addEventListener('change', function () {
+      if (!input.files.length) return;
+      btn.disabled = true; btn.textContent = 'Uploading…';
+      readFiles(input).then(function (files) { return api('apiUploadFiles', r.requestId, files); })
+        .then(function (res) { notice(res.count + ' file' + (res.count > 1 ? 's' : '') + ' added to the request folder. The hub will pick them up on its next upload check.'); })
+        .catch(fail)
+        .then(function () { btn.disabled = false; btn.textContent = 'Upload files'; input.value = ''; });
+    });
+    return el('span', {}, [btn, input]);
+  }
+
+  function formModal(kind, r, label) {
+    var body = openModal();
+    spinner(body);
+    api('apiForm', kind, r.requestId).then(function (desc) {
+      renderForm(body, desc, {
+        kind: kind, requestId: r.requestId, submitLabel: label, withFiles: kind === 'feedback',
+        onDone: function () {
+          closeModal();
+          notice(kind === 'feedback'
+            ? 'Feedback sent to the designer as one round. You will get an email when the update is ready.'
+            : 'Change sent. The communications team will update the plan.');
+          openRequest(r.requestId);
+        }
+      });
+    }).catch(function (e) { clear(body).appendChild(el('div', { class: 'notice err', text: e.message })); });
   }
 })();
 </script>

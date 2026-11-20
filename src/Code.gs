@@ -1,386 +1,308 @@
 /**
- * Code.gs — web app entry point and the API the front end calls
- * through google.script.run.
+ * Code.gs — web app entry point and the API the page calls via google.script.run.
  */
 
-var MAX_FILE_BYTES = 10 * 1024 * 1024;
-
 function doGet() {
-  var settings = readSettings_();
-  return HtmlService.createTemplateFromFile('Index').evaluate()
-    .setTitle(settings['App Name'] || 'Communications Hub')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  var config = readConfig_();
+  var t = HtmlService.createTemplateFromFile('Index');
+  t.brand = brandOf_(config);
+  return t.evaluate()
+    .setTitle(t.brand.headerText)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+function include(name) {
+  return HtmlService.createHtmlOutputFromFile(name).getContent();
 }
 
-/* ------------------------------------------------------------------ */
-/* Identity & permissions                                              */
-/* ------------------------------------------------------------------ */
+/** Source of the branching logic, injected into the page so client and server agree. */
+function formLogicSource() {
+  return visibleSections.toString();
+}
 
-function currentUser_() {
-  var email = String(Session.getActiveUser().getEmail() || '').toLowerCase();
-  if (!email) {
-    throw new Error('Could not identify you. Make sure you are signed in with your church Google account.');
+function brandOf_(config) {
+  function color(key, fallback) {
+    var v = String(config[key] || '').trim();
+    return /^#[0-9a-f]{3,8}$/i.test(v) ? v : fallback;
   }
-  var team = readTeam_();
-  for (var i = 0; i < team.length; i++) {
-    if (String(team[i].email).toLowerCase() === email) {
-      var p = team[i];
-      p.email = email;
-      p.onTeam = true;
-      return p;
-    }
+  function font(key, fallback) {
+    var v = String(config[key] || '').trim();
+    return /^[A-Za-z0-9 ]{2,40}$/.test(v) ? v : fallback;
   }
-  return { email: email, name: email, role: '', ministry: '', onTeam: false };
+  return {
+    headerText: String(config['Brand header text'] || 'Communications Hub').slice(0, 80),
+    headerColor: color('Brand header color', '#00b5e2'),
+    headerTextColor: color('Brand header text color', '#ffffff'),
+    accent: color('Brand accent color', '#00b5e2'),
+    font: font('Brand font', 'Georgia'),
+    headerFont: font('Brand header font', 'Montserrat')
+  };
 }
 
-function isAdmin_(user, settings) {
-  if (String(user.role).toLowerCase() === ROLES.COMMS.toLowerCase()) return true;
-  return splitEmails_(settings['Admin Emails']).indexOf(user.email) >= 0;
+/** Loads everything most calls need in one pass. */
+function context_() {
+  var config = readConfig_();
+  var requests = readRequests_();
+  var tasks = readTasks_(config, requests);
+  var user = currentUser_(config, requests);
+  return { config: config, requests: requests, tasks: tasks, user: user };
+}
+
+/** Open = not closed in the hub, and not every task in its plan is done. */
+function isOpen_(r, tasks) {
+  if (CLOSED_REQUEST.test(r.status)) return false;
+  var mine = tasks.filter(function (t) { return t.requestId === r.requestId; });
+  return !mine.length || mine.some(function (t) { return !t.done; });
+}
+
+function findRequest_(ctx, requestId) {
+  var r = ctx.requests.filter(function (x) { return x.requestId === requestId; })[0];
+  if (!r) throw new Error('Request ' + requestId + ' was not found.');
+  return r;
+}
+
+function designerHandles_(config) {
+  return String(config['Designer handles'] || '').split(',').map(lc_).filter(String);
 }
 
 /* ------------------------------------------------------------------ */
-/* API: bootstrap                                                      */
+/* Read APIs                                                           */
 /* ------------------------------------------------------------------ */
 
 function apiBootstrap() {
-  var settings = readSettings_();
-  var user = currentUser_();
-  var seen = {};
-  var deliverables = [];
-  readTemplates_().forEach(function (t) {
-    if (t.deliverable === EVERY_REQUEST || seen[t.deliverable]) return;
-    seen[t.deliverable] = true;
-    deliverables.push(t.deliverable);
-  });
-  var ministries = {};
-  readTeam_().forEach(function (p) { if (p.ministry) ministries[p.ministry] = true; });
-
+  var ctx = context_();
+  var c = ctx.config;
   return {
-    appName: settings['App Name'] || 'Communications Hub',
-    minLeadDays: Number(settings['Minimum Lead Days']) || 0,
-    user: { email: user.email, name: user.name, role: user.role, ministry: user.ministry, onTeam: user.onTeam },
-    isAdmin: isAdmin_(user, settings),
-    deliverables: deliverables,
-    ministries: Object.keys(ministries).sort(),
-    today: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+    user: ctx.user,
+    today: todayIso_(),
+    designerName: c['Designer name'] || 'Designer',
+    designerHandles: designerHandles_(c),
+    sprintCap: Number(c['Sprint cap per year']) || 0,
+    includedRounds: Number(c['Included revision rounds']) || 0,
+    links: {
+      calendar: safeUrl_(c['Master calendar link']),
+      hubSheet: ctx.user.isAdmin ? 'https://docs.google.com/spreadsheets/d/' + HUB_SPREADSHEET_ID + '/edit' : ''
+    },
+    forms: {
+      feedback: !!formIdFromUrl_(c[FORM_CONFIG_KEYS.feedback]),
+      change: !!formIdFromUrl_(c[FORM_CONFIG_KEYS.change])
+    },
+    myOpenTasks: myTasks_(ctx).filter(function (t) { return !t.done; }).length
   };
 }
 
+function apiHome() {
+  var ctx = context_();
+  var today = todayIso_();
+  var in7 = addDaysIso_(today, 7);
+  var year = today.slice(0, 4);
+  var open = ctx.tasks.filter(function (t) { return !t.done; });
+  var sprints = ctx.requests.filter(function (r) {
+    return /level 1/i.test(r.tier) && r.eventDate.slice(0, 4) === year && !/^(cancelled|declined)$/i.test(r.status);
+  }).length;
+  var mine = myTasks_(ctx).filter(function (t) { return !t.done; });
+  var myRequests = ctx.requests.filter(function (r) { return r.requesterEmail === ctx.user.email && isOpen_(r, ctx.tasks); });
+
+  return {
+    stats: {
+      needsReview: ctx.requests.filter(function (r) { return /needs review/i.test(r.status); }).length,
+      overdue: open.filter(function (t) { return t.dueDate && t.dueDate < today; }).length,
+      dueSoon: open.filter(function (t) { return t.dueDate >= today && t.dueDate <= in7; }).length,
+      designerOpen: open.filter(function (t) { return /designer/i.test(t.owner); }).length,
+      sprints: sprints,
+      sprintCap: Number(ctx.config['Sprint cap per year']) || 0
+    },
+    myTasks: mine.slice(0, 8),
+    myRequests: myRequests.map(function (r) { return requestSummary_(r, ctx.tasks); }),
+    reviewQueue: ctx.user.isAdmin
+      ? ctx.requests.filter(function (r) { return /needs (review|info)/i.test(r.status); }).map(function (r) { return requestSummary_(r, ctx.tasks); })
+      : []
+  };
+}
+
+function myTasks_(ctx) {
+  return ctx.tasks.filter(function (t) { return t.assigneeEmail && t.assigneeEmail === ctx.user.email; });
+}
+
+function apiMyTasks() {
+  return myTasks_(context_());
+}
+
+function apiRequests(scope) {
+  var ctx = context_();
+  var list = ctx.requests;
+  if (scope === 'mine') list = list.filter(function (r) { return r.requesterEmail === ctx.user.email; });
+  return list.map(function (r) { return requestSummary_(r, ctx.tasks); })
+    .sort(function (a, b) { return a.eventDate < b.eventDate ? 1 : a.eventDate > b.eventDate ? -1 : 0; });
+}
+
+function apiRequestDetail(requestId) {
+  var ctx = context_();
+  var r = findRequest_(ctx, requestId);
+  var isMine = r.requesterEmail === ctx.user.email;
+  return {
+    request: r,
+    tasks: ctx.tasks.filter(function (t) { return t.requestId === requestId; }),
+    can: {
+      feedback: isMine || ctx.user.isAdmin,
+      change: isMine || ctx.user.isAdmin,
+      upload: isMine || ctx.user.isAdmin || ctx.user.isDesigner
+    }
+  };
+}
+
+function apiTeamTimeline() {
+  var ctx = context_();
+  return ctx.tasks.filter(function (t) { return !t.done; });
+}
+
+function apiDesignQueue() {
+  var ctx = context_();
+  var handles = designerHandles_(ctx.config);
+  var designerTasks = ctx.tasks.filter(function (t) { return /designer/i.test(t.owner) && !t.done; });
+  var items = ctx.requests.filter(function (r) {
+    return /^yes$/i.test(r.needsDesign) && isOpen_(r, ctx.tasks) && !/^approved$/i.test(r.designState);
+  }).map(function (r) {
+    var s = requestSummary_(r, ctx.tasks);
+    s.handledBy = handles.indexOf(lc_(r.tier)) >= 0 ? 'designer' : 'in-house';
+    s.designerTasks = designerTasks.filter(function (t) { return t.requestId === r.requestId; });
+    return s;
+  }).sort(function (a, b) { return a.eventDate < b.eventDate ? -1 : 1; });
+  return { items: items, designerTasks: designerTasks };
+}
+
+function addDaysIso_(iso, n) {
+  var p = iso.split('-');
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + n);
+  return Utilities.formatDate(d, tz_(), 'yyyy-MM-dd');
+}
+
 /* ------------------------------------------------------------------ */
-/* API: timeline preview (no writes)                                   */
+/* Forms                                                               */
 /* ------------------------------------------------------------------ */
 
-function apiPreviewTimeline(eventDate, deliverables) {
-  var user = currentUser_();
-  var plan = planRequest_(user, eventDate, deliverables || [], readSettings_());
-  return {
-    rush: plan.timeline.rush,
-    leadDays: plan.timeline.leadDays,
-    items: plan.tasks.map(function (t) {
-      return { deliverable: t.deliverable, task: t.task, dueDate: t.dueDate, assigneeName: t.assigneeName, assigneeRole: t.assigneeRole, rush: t.rush === 'Yes' };
-    })
-  };
+function apiForm(kind, requestId) {
+  if (!FORM_CONFIG_KEYS[kind]) throw new Error('Unknown form.');
+  var ctx = context_();
+  if (kind !== 'request') assertCanAct_(ctx, findRequest_(ctx, requestId), 'change');
+  var desc = describeForm_(openForm_(kind, ctx.config));
+  desc.prefill = prefillFor_(desc, { email: ctx.user.email, name: ctx.user.name, requestId: requestId || '' });
+  return desc;
+}
+
+function assertCanAct_(ctx, request, what) {
+  var ok = request.requesterEmail === ctx.user.email || ctx.user.isAdmin || (what === 'upload' && ctx.user.isDesigner);
+  if (!ok) throw new Error('Only the person who submitted this request (or the communications team) can do that.');
 }
 
 /**
- * Builds the timeline and assigns each step to a person.
- * Returns {timeline, tasks[], designer} — nothing is saved.
+ * Submits one of the hub's forms on the signed-in person's behalf.
+ * kind: 'request' | 'feedback' | 'change'
  */
-function planRequest_(user, eventDate, deliverables, settings) {
-  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  var timeline = buildTimeline({
-    eventDate: eventDate,
-    submittedDate: today,
-    deliverables: deliverables,
-    templates: readTemplates_(),
-    workDays: parseWorkDays(settings['Work Days']),
-    minLeadDays: Number(settings['Minimum Lead Days']) || 0
-  });
+function apiSubmit(kind, answers, files, requestId) {
+  if (!FORM_CONFIG_KEYS[kind]) throw new Error('Unknown form.');
+  answers = answers || {};
+  var ctx = context_();
+  var request = kind === 'request' ? null : findRequest_(ctx, requestId);
+  if (request) assertCanAct_(ctx, request, 'change');
 
-  var team = readTeam_();
-  var openCounts = {};
-  readTable_(SHEETS.TASKS).forEach(function (t) {
-    if (t.status !== STATUS.DONE) {
-      var e = String(t.assigneeEmail).toLowerCase();
-      openCounts[e] = (openCounts[e] || 0) + 1;
-    }
-  });
-  var fallbackEmail = splitEmails_(settings['Fallback Assignee Email'])[0];
-  var comms = team.filter(function (p) { return String(p.role).toLowerCase() === ROLES.COMMS.toLowerCase(); })[0];
-  var fallback = fallbackEmail ? { email: fallbackEmail, name: fallbackEmail } : comms;
+  var form = openForm_(kind, ctx.config);
+  var desc = describeForm_(form);
 
-  var cache = {};
-  var tasks = [];
-  var designer = null;
-  timeline.items.forEach(function (item) {
-    var who = resolveAssignee(item.assignee, user, team, openCounts, fallback, cache);
-    if (!who) return; // e.g. no approver → approval step skipped
-    if (String(item.assignee).toLowerCase() === ROLES.DESIGNER.toLowerCase()) designer = who;
-    tasks.push({
-      deliverable: item.deliverable,
-      step: item.step,
-      task: item.task,
-      notes: item.notes,
-      assigneeEmail: who.email,
-      assigneeName: who.name,
-      assigneeRole: who.role,
-      dueDate: item.dueDate,
-      status: STATUS.NOT_STARTED,
-      rush: item.rush ? 'Yes' : ''
-    });
-  });
-  return { timeline: timeline, tasks: tasks, designer: designer };
-}
+  // Locked fields (email, request ID) always come from the server, never the browser.
+  var prefill = prefillFor_(desc, { email: ctx.user.email, name: ctx.user.name, requestId: requestId || '' });
+  Object.keys(prefill).forEach(function (id) { if (prefill[id].lock) answers[id] = prefill[id].value; });
 
-/* ------------------------------------------------------------------ */
-/* API: submit a request                                               */
-/* ------------------------------------------------------------------ */
-
-function apiSubmitRequest(form) {
-  var user = currentUser_();
-  var settings = readSettings_();
-
-  var title = clean_(form.title, 200);
-  var eventDate = clean_(form.eventDate, 10);
-  var deliverables = (form.deliverables || []).map(function (d) { return clean_(d, 100); }).filter(String);
-  if (!title) throw new Error('Please give the request a title.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) throw new Error('Please choose an event or launch date.');
-  if (!deliverables.length) throw new Error('Choose at least one thing you need (graphics, social media, etc.).');
-
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var plan = planRequest_(user, eventDate, deliverables, settings);
-    var tz = Session.getScriptTimeZone();
-    var requestId = nextRequestId_();
-
-    var folderUrl = '';
-    var files = [];
-    if ((form.files && form.files.length) || plan.designer) {
-      var folder = createRequestFolder_(settings, requestId, title);
-      folderUrl = folder.getUrl();
-      files = saveUploads_(folder, form.files || []);
-      shareFolder_(folder, plan.tasks.map(function (t) { return t.assigneeEmail; }).concat(user.email));
-    }
-
-    var request = {
-      requestId: requestId,
-      submittedAt: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm'),
-      submitterEmail: user.email,
-      submitterName: user.name,
-      ministry: clean_(form.ministry, 100) || user.ministry,
-      title: title,
-      eventDate: eventDate,
-      eventTime: clean_(form.eventTime, 100),
-      location: clean_(form.location, 200),
-      audience: clean_(form.audience, 200),
-      description: clean_(form.description, 5000),
-      keyMessage: clean_(form.keyMessage, 5000),
-      callToAction: clean_(form.callToAction, 500),
-      link: clean_(form.link, 500),
-      contact: clean_(form.contact, 200),
-      deliverables: deliverables.join(', '),
-      designNotes: clean_(form.designNotes, 5000),
-      filesUrl: folderUrl,
-      designerEmail: plan.designer ? plan.designer.email : '',
-      status: STATUS.NEW,
-      rush: plan.timeline.rush ? 'Yes' : ''
-    };
-
-    plan.tasks.forEach(function (t, i) {
-      t.taskId = requestId + '-' + ('0' + (i + 1)).slice(-2);
-      t.requestId = requestId;
-      t.requestTitle = title;
-    });
-
-    appendRows_(SHEETS.REQUESTS, [request]);
-    appendRows_(SHEETS.TASKS, plan.tasks);
-    SpreadsheetApp.flush();
-  } finally {
-    lock.releaseLock();
+  if (files && files.length) {
+    var folder = request && request.designFolder
+      ? folderFromUrl_(request.designFolder)
+      : newUploadFolder_(ctx.config, answers, desc);
+    saveFiles_(folder, files);
+    attachLink_(desc, answers, folder.getUrl());
   }
 
-  // Emails go out after the data is safely saved.
-  var warnings = [];
-  try { sendSubmitterConfirmation_(request, plan.tasks, settings); } catch (e) { warnings.push('confirmation email: ' + e.message); }
-  try { sendAssignmentEmails_(request, plan.tasks, settings); } catch (e) { warnings.push('assignment emails: ' + e.message); }
-  if (plan.designer) {
-    try { sendDesignerBrief_(request, plan.tasks, files, plan.designer, settings); } catch (e) { warnings.push('designer brief: ' + e.message); }
+  var before = {};
+  ctx.requests.forEach(function (r) { before[r.requestId] = true; });
+
+  submitForm_(form, answers);
+
+  var result = { ok: true, requestId: requestId || '' };
+  if (kind === 'request') result.requestId = waitForNewRequest_(ctx.user.email, before);
+  return result;
+}
+
+/** The hub's automation runs right after submit; give it a moment to assign an ID. */
+function waitForNewRequest_(email, before) {
+  for (var i = 0; i < 8; i++) {
+    Utilities.sleep(2500);
+    var found = readRequests_().filter(function (r) { return !before[r.requestId] && r.requesterEmail === email; });
+    if (found.length) return found[found.length - 1].requestId;
   }
-  if (warnings.length) console.warn('Request ' + request.requestId + ' saved, but: ' + warnings.join('; '));
-
-  return { requestId: request.requestId, rush: request.rush === 'Yes', taskCount: plan.tasks.length, warnings: warnings };
-}
-
-function nextRequestId_() {
-  var prefix = 'REQ-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMM') + '-';
-  var max = 0;
-  readTable_(SHEETS.REQUESTS).forEach(function (r) {
-    if (String(r.requestId).indexOf(prefix) === 0) max = Math.max(max, Number(r.requestId.slice(prefix.length)) || 0);
-  });
-  return prefix + ('00' + (max + 1)).slice(-3);
-}
-
-function clean_(v, maxLen) {
-  return String(v === undefined || v === null ? '' : v).trim().slice(0, maxLen || 1000);
+  return '';
 }
 
 /* ------------------------------------------------------------------ */
 /* Files                                                               */
 /* ------------------------------------------------------------------ */
 
-function createRequestFolder_(settings, requestId, title) {
-  var root;
-  try {
-    root = DriveApp.getFolderById(settings['Upload Folder ID']);
-  } catch (e) {
-    root = DriveApp.createFolder((settings['App Name'] || 'Communications Hub') + ' — Request Files');
-    setSetting_('Upload Folder ID', root.getId());
-  }
-  return root.createFolder(requestId + ' — ' + title.slice(0, 80));
+function folderIdFromUrl_(url) {
+  var m = /\/folders\/([A-Za-z0-9_-]{10,})/.exec(String(url || '')) || /[?&]id=([A-Za-z0-9_-]{10,})/.exec(String(url || ''));
+  return m ? m[1] : '';
 }
 
-function saveUploads_(folder, uploads) {
-  return uploads.slice(0, 10).map(function (f) {
+function folderFromUrl_(url) {
+  var id = folderIdFromUrl_(url);
+  if (!id) throw new Error('This request does not have a Drive folder yet.');
+  return DriveApp.getFolderById(id);
+}
+
+function newUploadFolder_(config, answers, desc) {
+  var parentId = folderIdFromUrl_(config['Drive Parent Folder']);
+  var parent = parentId ? DriveApp.getFolderById(parentId) : DriveApp.getRootFolder();
+  var it = parent.getFoldersByName('App uploads');
+  var uploads = it.hasNext() ? it.next() : parent.createFolder('App uploads');
+  var title = '';
+  desc.sections.forEach(function (s) {
+    s.items.forEach(function (i) {
+      if (!title && /name|title|what are we making/i.test(i.title) && !/your name/i.test(i.title) && answers[i.id]) title = String(answers[i.id]);
+    });
+  });
+  var folder = uploads.createFolder(todayIso_() + ' — ' + (title || 'Request').slice(0, 80));
+  try { folder.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* consumer accounts */ }
+  return folder;
+}
+
+function saveFiles_(folder, files) {
+  if (files.length > 10) throw new Error('Please attach 10 files or fewer.');
+  files.forEach(function (f) {
     var bytes = Utilities.base64Decode(String(f.data || ''));
-    if (bytes.length > MAX_FILE_BYTES) throw new Error('"' + f.name + '" is larger than 10 MB. Share a Drive link in the notes instead.');
-    var blob = Utilities.newBlob(bytes, f.mimeType || 'application/octet-stream', clean_(f.name, 200) || 'upload');
-    var file = folder.createFile(blob);
-    return { name: file.getName(), url: file.getUrl() };
+    if (bytes.length > MAX_FILE_BYTES) throw new Error('"' + f.name + '" is larger than 10 MB.');
+    folder.createFile(Utilities.newBlob(bytes, f.mimeType || 'application/octet-stream', String(f.name || 'upload').slice(0, 200)));
   });
 }
 
-function shareFolder_(folder, emails) {
-  var me = String(Session.getEffectiveUser().getEmail()).toLowerCase();
-  var seen = {};
-  emails.forEach(function (e) {
-    e = String(e || '').toLowerCase();
-    if (!e || seen[e] || e === me || e.indexOf('@example.') > 0) return;
-    seen[e] = true;
-    try { folder.addEditor(e); } catch (err) { console.warn('Could not share folder with ' + e + ': ' + err.message); }
-  });
-}
-
-/* ------------------------------------------------------------------ */
-/* API: reading data                                                   */
-/* ------------------------------------------------------------------ */
-
-function apiMyTasks() {
-  var user = currentUser_();
-  return readTable_(SHEETS.TASKS).filter(function (t) {
-    return String(t.assigneeEmail).toLowerCase() === user.email;
-  }).map(publicTask_).sort(byDue_);
-}
-
-function apiRequests() {
-  currentUser_();
-  var tasks = readTable_(SHEETS.TASKS);
-  var progress = {};
-  tasks.forEach(function (t) {
-    var p = progress[t.requestId] || (progress[t.requestId] = { done: 0, total: 0, nextDue: '' });
-    p.total++;
-    if (t.status === STATUS.DONE) p.done++;
-    else if (!p.nextDue || t.dueDate < p.nextDue) p.nextDue = t.dueDate;
-  });
-  return readTable_(SHEETS.REQUESTS).map(function (r) {
-    var p = progress[r.requestId] || { done: 0, total: 0, nextDue: '' };
-    return {
-      requestId: r.requestId, title: r.title, ministry: r.ministry, submitterName: r.submitterName,
-      eventDate: r.eventDate, deliverables: r.deliverables, status: r.status, rush: r.rush === 'Yes',
-      done: p.done, total: p.total, nextDue: p.nextDue, submittedAt: r.submittedAt
-    };
-  }).reverse();
-}
-
-function apiRequestDetail(requestId) {
-  currentUser_();
-  var request = readTable_(SHEETS.REQUESTS).filter(function (r) { return r.requestId === requestId; })[0];
-  if (!request) throw new Error('Request ' + requestId + ' was not found.');
-  delete request._row;
-  request.rush = request.rush === 'Yes';
-  var tasks = readTable_(SHEETS.TASKS).filter(function (t) { return t.requestId === requestId; })
-    .map(publicTask_).sort(byDue_);
-  return { request: request, tasks: tasks };
-}
-
-/** Every open task across all requests — powers the Team Timeline view. */
-function apiTeamTimeline() {
-  currentUser_();
-  return readTable_(SHEETS.TASKS).filter(function (t) {
-    return t.status !== STATUS.DONE && t.status !== STATUS.CANCELLED;
-  }).map(publicTask_).sort(byDue_);
-}
-
-function publicTask_(t) {
-  return {
-    taskId: t.taskId, requestId: t.requestId, requestTitle: t.requestTitle, deliverable: t.deliverable,
-    task: t.task, notes: t.notes, assigneeEmail: t.assigneeEmail, assigneeName: t.assigneeName,
-    assigneeRole: t.assigneeRole, dueDate: t.dueDate, status: t.status, rush: t.rush === 'Yes',
-    completedAt: t.completedAt
-  };
-}
-
-function byDue_(a, b) {
-  return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0;
-}
-
-/* ------------------------------------------------------------------ */
-/* API: updating tasks                                                 */
-/* ------------------------------------------------------------------ */
-
-function apiUpdateTask(taskId, newStatus) {
-  if ([STATUS.NOT_STARTED, STATUS.IN_PROGRESS, STATUS.DONE].indexOf(newStatus) < 0) {
-    throw new Error('Unknown status "' + newStatus + '".');
-  }
-  var user = currentUser_();
-  var settings = readSettings_();
-
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  var task, request, tasks;
-  try {
-    tasks = readTable_(SHEETS.TASKS);
-    task = tasks.filter(function (t) { return t.taskId === taskId; })[0];
-    if (!task) throw new Error('Task not found.');
-    request = readTable_(SHEETS.REQUESTS).filter(function (r) { return r.requestId === task.requestId; })[0];
-
-    var allowed = String(task.assigneeEmail).toLowerCase() === user.email ||
-      (request && String(request.submitterEmail).toLowerCase() === user.email) ||
-      isAdmin_(user, settings);
-    if (!allowed) throw new Error('Only the person assigned, the submitter, or an admin can update this task.');
-
-    var wasDone = task.status === STATUS.DONE;
-    task.status = newStatus;
-    if (newStatus === STATUS.DONE && !wasDone) {
-      task.completedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
-      task.completedBy = user.email;
-    } else if (newStatus !== STATUS.DONE) {
-      task.completedAt = '';
-      task.completedBy = '';
-    }
-    updateRow_(SHEETS.TASKS, task);
-
-    if (request) {
-      var siblings = tasks.filter(function (t) { return t.requestId === task.requestId; });
-      var doneCount = siblings.filter(function (t) { return t.status === STATUS.DONE; }).length;
-      var started = siblings.some(function (t) { return t.status !== STATUS.NOT_STARTED; });
-      var status = doneCount === siblings.length ? STATUS.COMPLETE : started ? STATUS.IN_PROGRESS : STATUS.NEW;
-      if (request.status !== status && request.status !== STATUS.CANCELLED) {
-        request.status = status;
-        updateRow_(SHEETS.REQUESTS, request);
+/** Adds "Attachments: <link>" to the first visible notes-style question. */
+function attachLink_(desc, answers, url) {
+  var path = visibleSections(desc.sections, answers);
+  var items = [];
+  path.indexes.forEach(function (i) { items = items.concat(desc.sections[i].items); });
+  for (var p = 0; p < ATTACHMENT_TARGETS.length; p++) {
+    for (var k = 0; k < items.length; k++) {
+      if (items[k].kind === 'paragraph' && ATTACHMENT_TARGETS[p].test(items[k].title)) {
+        var cur = String(answers[items[k].id] || '').trim();
+        answers[items[k].id] = (cur ? cur + '\n\n' : '') + 'Attachments: ' + url;
+        return;
       }
     }
-  } finally {
-    lock.releaseLock();
   }
+}
 
-  if (newStatus === STATUS.DONE && !wasDone && request) {
-    try { notifyNextStep_(task, tasks, request, settings); } catch (e) { console.warn('Next-step email failed: ' + e.message); }
-  }
-  return publicTask_(task);
+/** Designer (or requester/admin) uploads straight into the request's Design Folder. */
+function apiUploadFiles(requestId, files) {
+  var ctx = context_();
+  var request = findRequest_(ctx, requestId);
+  assertCanAct_(ctx, request, 'upload');
+  if (!files || !files.length) throw new Error('Choose at least one file.');
+  saveFiles_(folderFromUrl_(request.designFolder), files);
+  return { ok: true, count: files.length };
 }
