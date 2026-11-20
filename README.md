@@ -1,52 +1,54 @@
 # Calvary Communications App
 
-One place where staff submit communications requests, track them, and give design feedback, and where the designer works from a queue.
+One app for all staff communications. It replaces the Google Form, the Communications Hub spreadsheet and Google Tasks. Leaders submit requests, the communications team reviews them and assigns a tier, the app builds the timeline and assigns every task, the designer gets the brief, and design review rounds happen inside the app.
 
-**This app is a front end for the existing Communications Hub (the Google Sheet and its Apps Script automation). It does not replace it.**
+It runs as a web app in the church's Google account. It's free, staff sign in with their church Google login, emails go out through Gmail, and approved requests sync to the shared Master calendar.
 
-- **New requests are submitted through the real Google Form.** The hub's existing automation runs exactly as before: tiers, runway checks, timelines, Google Tasks, the master calendar, Drive folders and the designer brief.
-- **The app never edits the hub spreadsheet.** It requests read-only access to Sheets.
-- **The form screens are built live from the Google Forms.** Questions, required fields, sections and branching all come from the forms, so editing a form updates the app automatically.
+## How a request flows
 
-## What people see
+1. **Submit** (*New Request*). The same questions and branching as the old Google Form: event promotion, sermon series, or design only. A notice check shows how many weeks of runway the requester is giving, and attachments go into the request's Drive folder. The requester and the communications team get an email.
+2. **Review** (communications team). The app suggests a tier from the audience answers (Level 1–4, Series, Design). You confirm or change it, see the runway against that tier's requirement, and choose **Approve & build plan**, **Ask for more info** or **Decline**. The Level 1 Sprint cap is enforced, with an override.
+3. **Plan.** On approval, the timeline is built from the tier's template. These are the same steps and lead times the hub used (Level 1: 25 steps from 84 days out, Series: weekly posts for each week, and so on). Steps that are already late are moved to today and marked *Compressed*. Every step is assigned to a person:
+   - **Comms** steps go to the communications director.
+   - **Designer** steps go to the staff designer, for the tiers listed in *Designer handles*.
+   - **Pastor** steps go to the pastor.
+   - **Leader** steps go to whoever submitted the request.
+4. **Brief.** For Level 1 and Series, the designer gets a full design brief by email. Other tiers are designed in-house.
+5. **Design rounds.** The designer (or comms) uploads a draft, and the requester is asked to review it. The requester either **approves** it or **requests changes** in one message, which counts as one round. After the included rounds (default 2), further feedback is held until the communications team allows or declines another round. Approval leads to the final files, then *Delivered*.
+6. **Changes.** *Something changed* covers a new date (the communications team applies it, and open tasks shift by the same number of days), design or communications changes, and cancellations (open tasks close and the calendar events are removed).
+7. **Done.** When every task is checked off, the request becomes Done. Results can be logged after the event.
 
-| Screen | Who | What it does |
-|---|---|---|
-| **Home** | Everyone | Dashboard numbers (overdue, due this week, waiting for review, designer load, Level 1 Sprints used vs. cap), *my next tasks*, *my open requests*. Admins also see requests waiting for review. |
-| **New Request** | Everyone | The request form with its branching (event promotion / sermon series / design only), runway guidance, a "weeks of notice" check, and file attachments. The email is filled in from the person's Google sign-in. |
-| **My Tasks** | Everyone | Timeline tasks for the signed-in person: tasks assigned to them by name, plus tasks whose Owner is *Michael*, *Designer*, *Pastor*, or *Ministry Leader* (that request's submitter). |
-| **My Requests** | Everyone | Everything they've submitted, with tier, status, design state and progress. |
-| **Request page** | Everyone | All details, flags (e.g. COMPRESSED), the message to the requester, the feedback log, tasks and a visual timeline. Actions: **Request design changes** (feedback form), **Something changed** (change form), **Open Drive folder**, **Upload files** (straight into the request's Design Folder). |
-| **Design Queue** | Designer and admin | Open design work sorted by date, filtered to the designer or in-house (based on *Designer handles*), with rounds and the next deadline. |
-| **All Requests / Timeline** | Everyone | Searchable list of requests, and every open task grouped by week with a filter by person. |
+Everyone also gets **My Tasks** (check-off list), **My Requests**, **Calendar** (month view by tier, including Level 1 Sprint windows), **All Requests**, and **Timeline** (the team's open work by week). The designer and admins get the **Design Queue**. Admins get **Admin**, where people, roles and settings are edited. A **weekly digest** email goes out Monday mornings.
 
-The app also works on phones.
+## Setup (about 15 minutes)
 
-## Setup (about 10 minutes)
+Use the Google account that should own the system and send its emails (yours, or a comms@ account).
 
-1. **Add two rows to the hub's Config tab** (column A = setting, column B = value):
-   - `Design feedback form edit link`: the edit URL of the *Calvary Design Feedback* form
-   - `Change form edit link`: the edit URL of the *Change Request* form
-
-   (`Form edit link` is already there.) An edit URL looks like `https://docs.google.com/forms/d/…/edit`. Open the form and copy the address bar.
-2. **Create the app.** Go to [script.google.com](https://script.google.com), choose **New project**, and name it *Communications App*. Signed in as the account that owns the hub, create these files with the same names and paste in the contents of `src/`:
-   - Script files: `Code`, `Config`, `Data`, `FormLogic`, `Forms`
-   - HTML files: `Index`, `App`, `Styles`
+1. Go to [script.google.com](https://script.google.com), choose **New project**, and name it *Communications App*.
+2. Create each file in `src/` with the same name (the editor adds `.gs`/`.html`) and paste in its contents:
+   - Script files: `Calendar`, `Code`, `Config`, `Data`, `Design`, `FormDefs`, `FormLogic`, `Import`, `Notify`, `People`, `Plan`, `Requests`, `Setup`
+   - HTML files: `App`, `Index`, `Styles`
    - `appsscript.json`: turn on *Project Settings → Show "appsscript.json"* first
 
    (Or use [clasp](https://github.com/google/clasp): copy `.clasp.json.example` to `.clasp.json`, add the Script ID, then run `clasp push`.)
-3. **Deploy it.** Choose **Deploy → New deployment → Web app**, set *Execute as* to **Me** and *Who has access* to **Anyone within Calvary**, then approve the permissions.
-4. **Run one test request.** Submit a request in the app, then check that the hub behaves as it does for a normal form submission (new row, timeline, emails). Cancel the test request afterwards.
-5. Share the web app link with staff.
+3. Choose **`setup`** in the function dropdown, click **Run**, and approve the permissions. This creates the locked data file, makes you an admin, and schedules the Monday digest.
+4. Choose **`importFromHub`** and click **Run**. This brings over everything from the old hub: settings (brand, sprint cap, rounds, calendar, Drive folder, ministries), people and roles, all requests, timeline tasks and design feedback history. It can safely be re-run.
+5. Choose **Deploy → New deployment → Web app**, set *Execute as* to **Me** and *Who has access* to **Anyone within Calvary**, then share the link.
+6. Open **Admin** in the app and check *People* and *Settings*. Staff who aren't listed are added automatically the first time they open the app.
 
-`HUB_SPREADSHEET_ID` in `src/Config.gs` points at the hub. Every other setting is read from the hub's Config tab, including brand colors and fonts, designer and pastor emails, the sprint cap, revision rounds and the Drive parent folder.
+When the app is live, turn off the old form (*Responses → Accepting responses*) and the hub's triggers, so requests only come in one way.
+
+## Customizing
+
+- **Settings** (in the app): brand colors and fonts, which tiers the designer handles, sprint cap, revision rounds, turnaround and review days, calendar, Drive folder, ministries, digest.
+- **Timeline templates**: `src/Plan.gs` (`TEMPLATES`). Each step is days from the event, a channel, the task, and an owner (`Comms`, `Designer`, `Pastor` or `Leader`). Level 2 had no examples in the hub, so its template is a first draft to adjust.
+- **Tier suggestions**: `suggestTier()` in `src/Plan.gs`. **Runway** requirements: `TIER_INFO` in the same file.
+- **Form questions**: `src/FormDefs.gs`.
 
 ## Development
 
 ```bash
-npm test          # tests run the real server code against mocked Google services
-                  # (forms in tests/fixtures/forms.json mirror the live forms)
-npm run preview   # renders the real UI in headless Chromium → ./preview/*.png
+npm test          # timeline templates checked against the hub's real schedules,
+                  # plus end-to-end workflow tests against mocked Google services
+npm run preview   # renders the real UI with sample data → ./preview/*.png
 ```
-
-The tests also check that the app never writes to the spreadsheet: the mock throws on any write.

@@ -1,209 +1,370 @@
-// Run with: npm test
+// End-to-end: setup → submit → review → plan → design rounds → changes → import.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createContext, FORMS } = require('./gas-mock');
-const { hubTabs } = require('./fixtures/hub');
-const { visibleSections } = require('../src/FormLogic.gs');
+const { createContext, makeSpreadsheet } = require('./gas-mock');
 
 const NOW = new Date(2026, 10, 20, 9, 0); // Fri Nov 20 2026
+const ADMIN = 'admin@church.test', DESIGNER = 'designer@church.test', PASTOR = 'pastor@church.test', KARA = 'kara@church.test';
 
-function hub(user = 'kids@example.org') {
-  // Folders must exist in the mock Drive, so build the context first and then point rows at them.
-  const g = createContext({ tabs: hubTabs(), userEmail: user, now: NOW });
+function app() {
+  const g = createContext({ userEmail: ADMIN, now: NOW, owner: ADMIN });
+  g.setup();
   const parent = g.__drive.folder('Comms parent');
-  const kids = g.__drive.folder('REQ-2026-006');
-  const cfg = g.__sheets.Config.data.find(r => r[0] === 'Drive Parent Folder');
-  cfg[1] = parent.getUrl();
-  const req = g.__sheets.Requests.data;
-  const col = req[0].indexOf('Design Folder');
-  req.find(r => r[0] === 'REQ-2026-006')[col] = kids.getUrl();
-  return { g, parent, kids };
-}
-
-/** Answers keyed by item id, from {title: value}. */
-function byTitle(kind, map) {
-  const out = {};
-  for (const [title, v] of Object.entries(map)) {
-    // Some titles repeat across sections (series vs. design details); the later one is the promotion path.
-    const it = FORMS[kind].items.filter(i => i.title === title).pop();
-    if (!it) throw new Error('No question titled ' + title);
-    out[it.id] = v;
-  }
-  return out;
+  g.__call('apiSaveSettings', { 'Master calendar ID': 'master@group.calendar.google.com', 'Drive parent folder': parent.getUrl() });
+  g.__call('apiSavePerson', { email: ADMIN, name: 'Michael Admin', role: 'Communications', ministry: 'Communications' });
+  g.__call('apiSavePerson', { email: DESIGNER, name: 'Jamie Designer', role: 'Designer' });
+  g.__call('apiSavePerson', { email: PASTOR, name: 'Pat Pastor', role: 'Pastor' });
+  g.__mail.length = 0;
+  return { g, parent };
 }
 
 const PROMO = {
-  'Your name': 'Kara Kids', 'Ministry / department': 'Calvary Kids',
-  'What do you need?': 'Promoting an event or ministry (communications, plus design if needed)',
-  'Event or initiative name': 'Spring Kids Camp', 'Who is this for?': 'A specific age group (Kids / Students / Young Adults)',
-  'How much of the church is this relevant to?': '25-49%',
-  'Is this a "bridge" event designed to invite first-time guests or the community?': 'No',
-  'What is the ONE next step you want people to take?': 'Sign up / register',
-  'Describe that one next step in a sentence': 'Register in Church Center.',
-  'Share one story or human moment that shows why this matters': 'Last year a shy 3rd grader found friends.',
-  'Event / launch date': '2027-03-12', 'Does this need registration in PCO / Church Center?': 'Yes',
-  'Do you need graphic design for this?': 'Yes', 'What needs to be designed?': ['Main graphic / key art', 'Social graphics']
+  ministry: 'Calvary Kids', kind: 'Promoting an event or ministry (communications, plus design if needed)',
+  'promo.title': 'Spring Kids Camp', 'promo.whoFor': 'A specific age group (Kids / Students / Young Adults)',
+  'promo.reach': '25-49%', 'promo.bridge': 'No', 'promo.nextStepType': 'Sign up / register',
+  'promo.oneNextStep': 'Register in Church Center.', 'promo.story': 'Last year a shy 3rd grader found friends.',
+  'promo.eventDate': '2027-03-12', 'promo.registration': 'Yes', 'promo.needsDesign': 'Yes',
+  'promo.designItems': ['Main graphic / key art', 'Social graphics']
+};
+const SERIES = {
+  ministry: 'Pastoral / Staff', kind: 'Sermon series', 'series.title': 'Rooted', 'series.bigIdea': 'Deep roots, real fruit.',
+  'series.eventDate': '2027-03-07', 'series.seriesWeeks': '4', 'series.oneNextStep': 'Join a LifeGroup',
+  'series.designItems': ['Series key art / main graphic'], 'series.nextStepType': 'Join a LifeGroup'
 };
 
-/* ---------------- branching ---------------- */
+function asKara(g) {
+  g.__setUser(KARA);
+  g.__call('apiSetMyProfile', 'Kara Kids', 'Calvary Kids');
+}
 
-test('form branching follows the real request form', () => {
-  const { g } = hub();
-  const desc = g.__call('apiForm', 'request', '');
-  const titles = (answers) => visibleSections(desc.sections, answers).indexes.map(i => desc.sections[i].title);
-
-  assert.equal(visibleSections(desc.sections, {}).complete, false, 'must pick what you need first');
-  assert.deepEqual(titles(byTitle('request', { 'What do you need?': 'Sermon series' })), [desc.sections[0].title, 'Sermon series details']);
-  assert.deepEqual(titles(byTitle('request', { 'What do you need?': 'Graphic design only (t-shirt, logo, flyer, etc. - no communications plan)' })),
-    [desc.sections[0].title, 'Graphic design only']);
-
-  const promoNo = byTitle('request', { 'What do you need?': PROMO['What do you need?'], 'Do you need graphic design for this?': 'No' });
-  assert.deepEqual(titles(promoNo), [desc.sections[0].title, 'Audience & the ask', 'Dates & details', 'Last thing']);
-  const promoYes = byTitle('request', { 'What do you need?': PROMO['What do you need?'], 'Do you need graphic design for this?': 'Yes' });
-  assert.deepEqual(titles(promoYes), [desc.sections[0].title, 'Audience & the ask', 'Dates & details', 'Design details', 'Last thing']);
+test('setup creates the locked data file and makes the owner an admin', () => {
+  const { g } = app();
+  const people = g.__table('People');
+  assert.equal(people.find(p => p.email === ADMIN).role, 'Communications');
+  const s = g.readSettings_();
+  assert.equal(s['Designer handles'], 'Level 1, Series');
+  g.setup(); // re-running is safe
+  assert.equal(g.__table('People').filter(p => p.email === ADMIN).length, 1);
 });
 
-test('email is prefilled and locked to the signed-in person', () => {
-  const { g } = hub();
-  const desc = g.__call('apiForm', 'request', '');
-  const emailId = FORMS.request.items.find(i => i.title === 'Your email').id;
-  assert.deepEqual(desc.prefill[emailId], { value: 'kids@example.org', lock: true });
-  const nameId = FORMS.request.items.find(i => i.title === 'Your name').id;
-  assert.equal(desc.prefill[nameId].value, 'Kara Kids', 'name learned from earlier requests');
+test('new staff must give their name before submitting', () => {
+  const { g } = app();
+  g.__setUser(KARA);
+  assert.throws(() => g.apiSubmitRequest(PROMO, []), /tell us your name/);
+  g.__call('apiSetMyProfile', 'Kara Kids', 'Calvary Kids');
+  assert.equal(g.__call('apiBootstrap').user.name, 'Kara Kids');
 });
 
-/* ---------------- submitting ---------------- */
-
-test('submitting a request goes through the real form and returns the new ID', () => {
-  const { g, parent } = hub();
-  const answers = byTitle('request', { ...PROMO, 'Your email': 'someone-else@example.org' });
+test('submitting a promotion: validated, suggested tier, runway, folder, emails', () => {
+  const { g } = app();
+  asKara(g);
   const files = [{ name: 'logo.png', mimeType: 'image/png', data: Buffer.from('png').toString('base64') }];
-  const res = g.__call('apiSubmit', 'request', answers, files, '');
-
-  assert.equal(res.requestId, 'REQ-2026-105');
-  const sub = g.__submissions[0];
-  assert.equal(sub.kind, 'request');
-  assert.equal(sub.answers['Your email'], 'kids@example.org', 'browser cannot spoof the email');
-  assert.equal(sub.answers['Event or initiative name'], 'Spring Kids Camp');
-  assert.ok(sub.answers['Event / launch date'] instanceof Date || Object.prototype.toString.call(sub.answers['Event / launch date']) === '[object Date]');
-  assert.deepEqual([...sub.answers['What needs to be designed?']], ['Main graphic / key art', 'Social graphics']);
-
-  // Attachments landed in Drive and the link was added to the form answer.
-  const uploads = parent.children.find(c => c.name === 'App uploads');
-  assert.equal(uploads.children[0].files[0].name, 'logo.png');
-  assert.match(sub.answers['Inspiration or reference links'], /Attachments: https:\/\/drive\.google\.com\/drive\/folders\//);
+  const res = g.__call('apiSubmitRequest', { ...PROMO, 'series.title': 'stray answer from a hidden section' }, files);
+  assert.equal(res.requestId, 'REQ-2026-001');
+  const r = g.__table('Requests')[0];
+  assert.equal(r.status, 'Needs Review');
+  assert.equal(r.suggestedTier, 'Level 3');
+  assert.equal(r.title, 'Spring Kids Camp');
+  assert.equal(r.designItems, 'Main graphic / key art, Social graphics');
+  assert.equal(r.flags, '', '112 days is plenty of runway');
+  assert.ok(!('bigIdea' in r) || r.bigIdea === '', 'hidden-section answers ignored');
+  assert.match(r.designFolder, /drive\.google\.com\/drive\/folders\//);
+  assert.equal(g.__drive.folders[r.designFolder.split('/').pop()].files[0].name, 'logo.png');
+  assert.ok(g.__mail.some(m => m.to === KARA && /Request received/.test(m.subject)));
+  assert.ok(g.__mail.some(m => m.to === ADMIN && /New request to review/.test(m.subject)));
 });
 
-test('answers from hidden sections are not submitted', () => {
-  const { g } = hub();
-  const answers = byTitle('request', { ...PROMO, 'Do you need graphic design for this?': 'No', 'Series title (working title is fine)': 'stray' });
-  g.__call('apiSubmit', 'request', answers, [], '');
-  const sent = g.__submissions[0].answers;
-  assert.equal(sent['Series title (working title is fine)'], undefined);
-  assert.equal(sent['What needs to be designed?'], undefined, 'design section skipped when design = No');
+test('validation: required answers, real choices, no past dates', () => {
+  const { g } = app();
+  asKara(g);
+  const missing = { ...PROMO }; delete missing['promo.story'];
+  assert.throws(() => g.apiSubmitRequest(missing, []), /Share one story/);
+  assert.throws(() => g.apiSubmitRequest({ ...PROMO, 'promo.reach': '200%' }, []), /not an option/);
+  assert.throws(() => g.apiSubmitRequest({ ...PROMO, 'promo.eventDate': '2026-01-01' }, []), /already passed/);
+  assert.equal(g.__table('Requests').length, 0);
 });
 
-test('missing required answers are rejected before anything is submitted', () => {
-  const { g } = hub();
-  const answers = byTitle('request', { ...PROMO });
-  delete answers[FORMS.request.items.find(i => i.title === 'Share one story or human moment that shows why this matters').id];
-  assert.throws(() => g.apiSubmit('request', answers, [], ''), /Share one story/);
-  assert.equal(g.__submissions.length, 0);
+test('admin approval builds the plan, assigns people, syncs the calendar', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  assert.throws(() => g.apiReview('REQ-2026-001', { action: 'approve' }), /Only the communications team/);
+
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3', message: 'Looks great!' });
+  const r = g.__table('Requests')[0];
+  assert.equal(r.status, 'Planned');
+  assert.equal(r.tier, 'Level 3');
+  assert.equal(r.mode, 'Sprinkle (NextGen channels)');
+  assert.equal(r.designState, 'Briefed');
+  const tasks = g.__table('Tasks');
+  assert.equal(tasks.length, 12);
+  assert.equal(tasks.find(t => /final copy/.test(t.task)).assigneeEmail, KARA, 'Leader tasks go to the submitter');
+  assert.equal(tasks.find(t => t.key === 'draft').assigneeEmail, ADMIN, 'Level 3 designed in-house');
+  assert.equal(Object.keys(g.__calendar.events).length, 1);
+  assert.match(Object.values(g.__calendar.events)[0].title, /^\[L3\] Spring Kids Camp/);
+  assert.ok(g.__mail.some(m => m.to === KARA && /Approved/.test(m.subject) && /Looks great/.test(m.htmlBody)));
 });
 
-test('choices that are not on the form are rejected', () => {
-  const { g } = hub();
-  const answers = byTitle('request', { ...PROMO, 'Ministry / department': 'Made Up Ministry' });
-  assert.throws(() => g.apiSubmit('request', answers, [], ''), /not an option/);
+test('needs-info and decline notify the requester', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  g.__setUser(ADMIN);
+  assert.throws(() => g.apiReview('REQ-2026-001', { action: 'needsInfo' }), /what information/);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'needsInfo', message: 'What age range?' });
+  assert.equal(g.__table('Requests')[0].status, 'Needs Info');
+  assert.ok(g.__mail.some(m => m.to === KARA && /More info needed/.test(m.subject)));
+  g.__call('apiReview', 'REQ-2026-001', { action: 'decline', message: 'Calendar is full that week.' });
+  assert.equal(g.__table('Requests')[0].status, 'Declined');
 });
 
-test('design feedback is sent through the feedback form for your own request only', () => {
-  const { g, kids } = hub();
-  const answers = byTitle('feedback', {
-    'What kind of change is this?': 'Fixing a mistake (typo, date, time, name)',
-    'What needs to change? (list everything in this one message)': 'Date should be 12/18.'
-  });
-  const files = [{ name: 'markup.png', mimeType: 'image/png', data: Buffer.from('x').toString('base64') }];
-  g.__call('apiSubmit', 'feedback', answers, files, 'REQ-2026-006');
-  const sub = g.__submissions[0];
-  assert.equal(sub.answers['Request ID'], 'REQ-2026-006');
-  assert.equal(sub.answers['Your email'], 'kids@example.org');
-  assert.equal(kids.files[0].name, 'markup.png', 'feedback files go into the request folder');
-
-  g.__setUser('pastor@example.org');
-  assert.throws(() => g.apiSubmit('feedback', answers, [], 'REQ-2026-006'), /Only the person who submitted/);
+test('Level 1 sprint cap is enforced unless overridden', () => {
+  const { g } = app();
+  g.__call('apiSaveSettings', { 'Sprint cap per year': '1' });
+  asKara(g);
+  const big = { ...PROMO, 'promo.whoFor': 'Whole church + community', 'promo.reach': '80%+' };
+  g.__call('apiSubmitRequest', big, []);
+  g.__call('apiSubmitRequest', { ...big, 'promo.title': 'Second big event' }, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 1' });
+  assert.throws(() => g.apiReview('REQ-2026-002', { action: 'approve', tier: 'Level 1' }), /^Error: CAP: 1 of 1/);
+  g.__call('apiReview', 'REQ-2026-002', { action: 'approve', tier: 'Level 1', overrideCap: true });
+  assert.equal(g.__table('Requests')[1].status, 'Planned');
+  assert.equal(Object.keys(g.__calendar.events).length, 4, 'event + sprint window each');
 });
 
-test('admin can send a change for any request', () => {
-  const { g } = hub('admin@example.org');
-  const answers = byTitle('change', { 'What is changing?': ['Event or launch date'], 'New date (if the date is changing)': '2026-12-04', 'Tell us what changed': 'Moved a week.' });
-  g.__call('apiSubmit', 'change', answers, [], 'REQ-2026-006');
-  assert.equal(g.__submissions[0].answers['Request ID'], 'REQ-2026-006');
+test('design rounds: draft → feedback → revision → held → released → approved → delivered', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3' });
+  const file = [{ name: 'draft1.png', mimeType: 'image/png', data: 'eA==' }];
+  const id = 'REQ-2026-001';
+  const state = () => g.__table('Requests')[0];
+  const open = (key) => g.__table('Tasks').filter(t => t.key === key && t.status === 'Not started');
+
+  // Kara can't deliver designs.
+  g.__setUser(KARA);
+  assert.throws(() => g.apiUploadFiles(id, file, 'draft'), /Only the designer/);
+
+  g.__setUser(ADMIN);
+  g.__call('apiUploadFiles', id, file, 'draft');
+  assert.equal(state().designState, 'In Review');
+  assert.equal(open('draft').length, 0, 'draft step closed');
+  assert.equal(open('review')[0].dueDate, '2026-11-23', 'review due in 3 days');
+  assert.ok(g.__mail.some(m => m.to === KARA && /First draft ready/.test(m.subject)));
+
+  const fb = (text) => ({ kind: 'Changing the design (look, layout, photos, colors)', text });
+  g.__setUser(KARA);
+  g.__call('apiDesignFeedback', id, fb('More blue please.'), []);
+  assert.equal(state().designState, 'Revising');
+  assert.equal(state().designRound, '1');
+  assert.equal(open('revision')[0].task, 'Round 1 revisions: More blue please.');
+  assert.equal(open('revision')[0].assigneeEmail, ADMIN);
+  assert.throws(() => g.apiApproveDesign(id), /no draft waiting/);
+
+  g.__setUser(ADMIN);
+  g.__call('apiUploadFiles', id, file, 'draft');
+  g.__setUser(KARA);
+  g.__call('apiDesignFeedback', id, fb('Bigger logo.'), []);
+  g.__setUser(ADMIN);
+  g.__call('apiUploadFiles', id, file, 'draft');
+  g.__setUser(KARA);
+  const third = g.__call('apiDesignFeedback', id, fb('Actually, try orange.'), []);
+  assert.equal(third.held, true, 'only 2 rounds included');
+  assert.equal(state().designState, 'Feedback Held');
+  assert.ok(g.__mail.some(m => m.to === ADMIN && /Extra design round/.test(m.subject)));
+
+  g.__setUser(ADMIN);
+  g.__call('apiReleaseHeldFeedback', id, true);
+  assert.equal(state().designRound, '3');
+  g.__call('apiUploadFiles', id, file, 'draft');
+  g.__setUser(KARA);
+  g.__call('apiApproveDesign', id);
+  assert.equal(state().designState, 'Approved');
+  assert.equal(open('review').length, 0);
+
+  g.__setUser(ADMIN);
+  g.__call('apiUploadFiles', id, [{ name: 'final.zip', data: 'eA==' }], 'final');
+  assert.equal(state().designState, 'Delivered');
+  assert.equal(open('final').length, 0);
+  const log = g.__table('Activity').filter(a => a.requestId === id).map(a => a.type);
+  assert.deepEqual(log.filter(t => t === 'Feedback').length, 4, '3 rounds + release note');
 });
 
-/* ---------------- reading the hub ---------------- */
-
-test('tasks are routed to people, including Owner = Michael/Designer/Ministry Leader', () => {
-  const { g } = hub('admin@example.org');
-  const mine = g.__call('apiMyTasks');
-  assert.ok(mine.some(t => /Stage announcement/.test(t.task)), 'Owner "Michael" → admin from Config');
-  assert.equal(mine.filter(t => t.taskKey === 'REQ-2026-008-16').length, 1, 'duplicate hub rows shown once');
-
-  g.__setUser('designer@example.org');
-  assert.ok(g.__call('apiMyTasks').some(t => /FINAL assets/.test(t.task)));
-
-  g.__setUser('kids@example.org');
-  assert.deepEqual(g.__call('apiMyTasks').map(t => t.taskKey), ['REQ-2026-006-V2']);
+test('designer-handled tiers: brief emailed on approval, designer owns the work', () => {
+  const { g } = app();
+  g.__setUser(PASTOR);
+  g.__call('apiSetMyProfile', 'Pat Pastor', 'Pastoral / Staff');
+  g.__call('apiSubmitRequest', SERIES, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Series' });
+  const tasks = g.__table('Tasks');
+  assert.equal(tasks.filter(t => /^Week \d/.test(t.task)).length, 4);
+  assert.equal(tasks.find(t => t.key === 'draft').assigneeEmail, DESIGNER);
+  assert.equal(tasks.find(t => t.key === 'brief').status, 'Done', 'brief auto-sent');
+  assert.equal(tasks.find(t => /locked with pastor/.test(t.task)).assigneeEmail, PASTOR);
+  const brief = g.__mail.find(m => m.to === DESIGNER && /Design brief: Rooted/.test(m.subject));
+  assert.ok(brief);
+  assert.match(brief.htmlBody, /Deep roots, real fruit\./);
+  assert.equal(brief.replyTo, PASTOR);
+  assert.match(g.__table('Requests')[0].flags, /COMPRESSED: 107 days|^$/);
+  const ev = Object.values(g.__calendar.events)[0];
+  assert.match(ev.title, /^\[Series\] Rooted/);
 });
 
-test('dates in the hub formats are understood', () => {
-  const { g } = hub();
-  const all = g.__call('apiRequests', 'all');
-  assert.equal(all.find(r => r.requestId === 'REQ-2026-010').eventDate, '2027-03-27');
-  assert.equal(all.find(r => r.requestId === 'REQ-2026-002').eventDate, '2027-01-03');
-  const tl = g.__call('apiTeamTimeline');
-  assert.equal(tl.find(t => t.taskKey === 'REQ-2026-002-07').dueDate, '2026-11-29');
+test('date change on a planned request waits for admin, then shifts open tasks', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3' });
+  const before = g.__table('Tasks').find(t => /final copy/.test(t.task)).dueDate;
+
+  g.__setUser(KARA);
+  const res = g.__call('apiRequestChange', 'REQ-2026-001', { changes: ['Event or launch date'], newDate: '2027-03-19', details: 'Camp moved a week.' });
+  assert.equal(res.pendingDate, '2027-03-19');
+  assert.equal(g.__table('Requests')[0].eventDate, '2027-03-12', 'not applied yet');
+  assert.ok(g.__mail.some(m => m.to === ADMIN && /Change request/.test(m.subject)));
+  assert.throws(() => g.apiApplyNewDate('REQ-2026-001'), /Only the communications team/);
+
+  g.__setUser(ADMIN);
+  g.__call('apiApplyNewDate', 'REQ-2026-001');
+  const after = g.__table('Tasks').find(t => /final copy/.test(t.task)).dueDate;
+  assert.equal(g.__table('Requests')[0].eventDate, '2027-03-19');
+  assert.equal(require('../src/Plan.gs').daysBetweenIso(before, after), 7);
+  assert.equal(Object.keys(g.__calendar.events).length, 1, 'calendar re-synced, not duplicated');
 });
 
-test('home dashboard numbers', () => {
-  const { g } = hub('admin@example.org');
-  const h = g.__call('apiHome');
-  assert.equal(h.stats.needsReview, 1);
-  assert.equal(h.stats.overdue, 1, 'Nov 18 stage task (listed twice in the hub, counted once); Nov 20 is today, not overdue');
-  assert.equal(h.stats.sprints, 1);
-  assert.equal(h.reviewQueue.length, 1, 'admin sees the review queue');
-  g.__setUser('kids@example.org');
-  assert.equal(g.__call('apiHome').reviewQueue.length, 0);
+test('cancelling closes open tasks and removes calendar events', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3' });
+  g.__setUser(KARA);
+  g.__call('apiRequestChange', 'REQ-2026-001', { changes: ['Cancel this request'], details: 'Camp is off.' });
+  assert.equal(g.__table('Requests')[0].status, 'Cancelled');
+  assert.ok(g.__table('Tasks').every(t => t.status === 'Cancelled'));
+  assert.equal(Object.keys(g.__calendar.events).length, 0);
 });
 
-test('design queue splits designer vs in-house work and hides approved designs', () => {
-  const { g } = hub('designer@example.org');
-  const q = g.__call('apiDesignQueue');
-  const ids = q.items.map(i => i.requestId);
-  assert.ok(!ids.includes('REQ-2026-002'), 'approved series art is out of the queue');
-  assert.equal(q.items.find(i => i.requestId === 'REQ-2026-008').handledBy, 'designer');
-  assert.equal(q.items.find(i => i.requestId === 'REQ-2026-006').handledBy, 'in-house');
+test('tasks: permissions, review steps, request completes when everything is done', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', { ...PROMO, 'promo.needsDesign': 'No' }, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 4' });
+  const tasks = g.__table('Tasks');
+  const karaTask = tasks.find(t => t.assigneeEmail === KARA);
+  const adminTask = tasks.find(t => t.assigneeEmail === ADMIN);
+  g.__setUser(KARA);
+  assert.throws(() => g.apiSetTaskDone(adminTask.taskKey, true), /Only the person assigned/);
+  g.__call('apiSetTaskDone', karaTask.taskKey, true);
+  assert.equal(g.__call('apiMyTasks').find(t => t.taskKey === karaTask.taskKey).status, 'Done');
+  g.__setUser(ADMIN);
+  g.__table('Tasks').filter(t => t.status !== 'Done').forEach(t => g.__call('apiSetTaskDone', t.taskKey, true));
+  assert.equal(g.__table('Requests')[0].status, 'Done');
+  g.__call('apiSetTaskDone', adminTask.taskKey, false);
+  assert.equal(g.__table('Requests')[0].status, 'Planned', 'reopening a task reopens the request');
 });
 
-test('designer can upload finals into the request folder; others cannot', () => {
-  const { g, kids } = hub('designer@example.org');
-  g.__call('apiUploadFiles', 'REQ-2026-006', [{ name: 'final.png', mimeType: 'image/png', data: 'eA==' }]);
-  assert.equal(kids.files[0].name, 'final.png');
-  g.__setUser('pastor@example.org');
-  assert.throws(() => g.apiUploadFiles('REQ-2026-006', [{ name: 'x', data: 'eA==' }]), /Only the person/);
+test('home, design queue, calendar and detail views', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  g.__setUser(ADMIN);
+  let home = g.__call('apiHome');
+  assert.equal(home.stats.needsReview, 1);
+  assert.equal(home.actionNeeded.length, 1);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3' });
+  home = g.__call('apiHome');
+  assert.equal(home.stats.needsReview, 0);
+  assert.ok(home.myTasks.length > 0);
+  assert.equal(g.__call('apiDesignQueue')[0].handledBy, 'in-house');
+  assert.equal(g.__call('apiCalendar', '2027-03')[0].title, 'Spring Kids Camp');
+  assert.equal(g.__call('apiCalendar', '2027-05').length, 0);
+  const d = g.__call('apiRequestDetail', 'REQ-2026-001');
+  assert.equal(d.can.deliver, true);
+  g.__setUser(PASTOR);
+  const other = g.__call('apiRequestDetail', 'REQ-2026-001');
+  assert.equal(other.can.change, false);
+  assert.equal(other.can.deliver, false);
 });
 
-test('the app never writes to the hub spreadsheet', () => {
-  const { g } = hub('admin@example.org');
-  // The mock throws on any write; run every API once.
-  g.apiBootstrap(); g.apiHome(); g.apiMyTasks(); g.apiRequests('all'); g.apiRequests('mine');
-  g.apiRequestDetail('REQ-2026-008'); g.apiTeamTimeline(); g.apiDesignQueue();
+test('admin-only settings and people', () => {
+  const { g } = app();
+  asKara(g);
+  assert.throws(() => g.apiAdminData(), /Only the communications team/);
+  assert.throws(() => g.apiSaveSettings({ 'Sprint cap per year': '99' }), /Only the communications team/);
+  g.__setUser(ADMIN);
+  assert.throws(() => g.apiSavePerson({ email: ADMIN, role: 'Staff' }), /own admin role/);
+  g.__call('apiSaveSettings', { 'Sprint cap per year': '8', 'Not a setting': 'x' });
+  assert.equal(g.readSettings_()['Sprint cap per year'], '8');
+  assert.equal(g.readSettings_()['Not a setting'], undefined);
 });
 
-test('requests whose whole plan is done drop out of the design queue', () => {
-  const { g } = hub('designer@example.org');
-  // Mark every CK task done, the way the hub leaves finished work (status stays "Planned").
-  const tl = g.__sheets.Timeline.data;
-  tl.forEach(r => { if (r[1] === 'REQ-2026-006') r[8] = 'Done'; });
-  assert.ok(!g.__call('apiDesignQueue').items.some(i => i.requestId === 'REQ-2026-006'));
+test('import from the old hub: settings, people, requests, tasks, history', () => {
+  const { g } = app();
+  const hub = makeSpreadsheet('hub', 'Hub');
+  const put = (name, rows) => { const sh = hub.insertSheet(name); rows.forEach(r => sh.appendRow(r)); };
+  put('Config', [
+    ['Setting', 'Value', '', 'Ministries (form dropdown)'],
+    ['Your email', ADMIN, '', 'Calvary Kids'],
+    ['Designer name', 'Jamie Designer', '', 'Calvary Students'],
+    ['Designer email', DESIGNER],
+    ['Master calendar link', 'https://calendar.google.com/calendar/u/0/r?cid=master%40group.calendar.google.com'],
+    ['Sprint cap per year', '6'], ['Brand header color', '#00b5e2'], ['Designer handles', 'Level 1, Series']
+  ]);
+  const RH = ['Request ID', 'Submitted', 'Requester', 'Requester Email', 'Ministry', 'Event / Initiative', 'Event Date', 'Suggested Tier', 'Final Tier', 'Mode', 'Status', 'Flags', 'Who For', 'Story', 'Details', 'Needs Design', 'Design Items', 'Design Folder', 'Request Type', 'Series Weeks', 'Design State', 'Design Round', 'Design Feedback Log'];
+  put('Requests', [RH,
+    ['REQ-2026-002', new Date(2026, 9, 15, 19, 10), 'Pat Pastor', PASTOR, 'Sermon Series', 'A New Thing', new Date(2027, 0, 3), 'Series', 'Series', 'Series (multi-week)', 'Planned', '', 'Whole church', 'God is doing a new thing.', 'Isaiah 43', 'Yes', 'Key art', '', 'Sermon Series', '5', 'Approved', '1', 'Nov 16 | Round 1 from Pat: drop the pink\nNov 16 | APPROVED by Pat'],
+    ['REQ-2026-005', '11/2/2026 18:42:54', 'Kara Kids', KARA, 'Calvary Kids', '1Team Night', '3/5/2027', 'Level 4', 'Level 4', 'Snuggle', 'Planned', '', 'A specific ministry or group', 'Honoring our team', '', 'Yes', 'Main graphic', '', 'Promotion', '', 'Briefed', '0', '']
+  ]);
+  const TH = ['Task Key', 'Request ID', 'Event', 'Due Date', 'Channel', 'Task', 'Owner', 'Tier', 'Status', 'Google Task ID', 'Notes', 'Assigned To', 'Assigned Email'];
+  put('Timeline', [TH,
+    ['REQ-2026-005-01', 'REQ-2026-005', '1Team Night', 'Tue, Feb 9, 2027', 'Content', 'Send final copy, story and photos for this request (reply to the Communications email)', 'Ministry Leader', 'Level 4', 'Not started', 'x', '', 'Kara Kids', KARA],
+    ['REQ-2026-005-02', 'REQ-2026-005', '1Team Night', 'Tue, Feb 16, 2027', 'Design', 'Create the design in-house: Main graphic', 'Michael', 'Level 4', 'Not started', 'y', '', '', ''],
+    ['REQ-2026-005-08', 'REQ-2026-005', '1Team Night', 'Wed, Mar 3, 2027', 'Social', 'Reminder post; bulletin listing', 'Michael', 'Level 4', 'Not started', 'a', '', '', ''],
+    ['REQ-2026-005-08', 'REQ-2026-005', '1Team Night', 'Wed, Mar 3, 2027', 'Social', 'Reminder post; bulletin listing', 'Michael', 'Level 4', 'Not started', 'b', '', '', ''],
+    ['REQ-2026-002-07', 'REQ-2026-002', 'A New Thing', 'Sun, Nov 29, 2026', 'Design', 'FINAL assets delivered to request folder', 'Designer', 'Series', 'Not started', 'z', '', '', '']
+  ]);
+  g.__spreadsheets.hub = hub;
+
+  const out = g.__call('importFromHub', 'hub');
+  assert.deepEqual([out.requests, out.tasks], [2, 4], 'duplicate hub task skipped');
+  assert.equal(out.completed, 0);
+  assert.equal(g.readSettings_()['Master calendar ID'], 'master@group.calendar.google.com');
+  assert.equal(g.readSettings_()['Ministries'], 'Calvary Kids, Calvary Students');
+  const people = g.__table('People');
+  assert.equal(people.find(p => p.email === KARA).name, 'Kara Kids');
+  const reqs = g.__table('Requests');
+  const series = reqs.find(r => r.requestId === 'REQ-2026-002');
+  assert.equal(series.eventDate, '2027-01-03');
+  assert.equal(series.requestType, 'Series');
+  assert.equal(series.bigIdea, 'God is doing a new thing.');
+  assert.equal(reqs.find(r => r.requestId === 'REQ-2026-005').eventDate, '2027-03-05');
+  const tasks = g.__table('Tasks');
+  const content = tasks.find(t => t.taskKey === 'REQ-2026-005-01');
+  assert.equal(content.task, 'Send final copy, story and photos for this request');
+  assert.equal(content.owner, 'Leader');
+  assert.equal(tasks.find(t => t.taskKey === 'REQ-2026-005-02').assigneeEmail, ADMIN);
+  assert.equal(tasks.find(t => t.taskKey === 'REQ-2026-002-07').assigneeEmail, DESIGNER);
+  assert.equal(tasks.find(t => t.taskKey === 'REQ-2026-005-02').key, 'draft');
+  assert.equal(g.__table('Activity').filter(a => a.requestId === 'REQ-2026-002' && a.type === 'Approved').length, 1);
+
+  // Re-running skips what's there; new IDs continue after imported ones.
+  assert.equal(g.__call('importFromHub', 'hub').skipped, 2);
+  asKara(g);
+  assert.equal(g.__call('apiSubmitRequest', PROMO, []).requestId, 'REQ-2026-006');
+});
+
+test('the app never emails placeholder addresses', () => {
+  const { g } = app();
+  g.__call('apiSavePerson', { email: 'design@example.com', name: 'x', role: 'Designer' });
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  assert.ok(!g.__mail.some(m => /@example\./.test(m.to)));
 });

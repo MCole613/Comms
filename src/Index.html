@@ -25,83 +25,56 @@
       <button class="tab" data-view="new">New Request</button>
       <button class="tab" data-view="tasks">My Tasks <span class="badge" id="taskBadge" hidden></span></button>
       <button class="tab" data-view="mine">My Requests</button>
-      <button class="tab" data-view="design" id="designTab" hidden>Design Queue</button>
+      <button class="tab" data-view="design" data-role="design" hidden>Design Queue</button>
+      <button class="tab" data-view="calendar">Calendar</button>
       <button class="tab" data-view="all">All Requests</button>
       <button class="tab" data-view="timeline">Timeline</button>
+      <button class="tab" data-view="admin" data-role="admin" hidden>Admin</button>
     </nav>
     <div class="who" id="who"></div>
   </header>
 
   <main>
     <div id="notice" class="notice" hidden></div>
-
     <section class="view active" id="view-home"><div id="home"><div class="spinner">Loading…</div></div></section>
-
-    <section class="view" id="view-new">
-      <div class="layout-2col">
-        <div class="card"><div id="requestForm"><div class="spinner">Loading the request form…</div></div></div>
-        <aside class="card sticky">
-          <h3>Before you submit</h3>
-          <div class="guide">
-            <p><b>One Story + One Next Step.</b> Every request is reviewed, given a tier, and scheduled.</p>
-            <table class="runway">
-              <tr><td>Level 1</td><td>12+ weeks</td></tr>
-              <tr><td>Level 2 &amp; 3</td><td>5–7 weeks</td></tr>
-              <tr><td>Level 4</td><td>3 weeks</td></tr>
-              <tr><td>Sermon series</td><td>10 weeks</td></tr>
-              <tr><td>Design only</td><td>3 weeks</td></tr>
-            </table>
-            <p class="muted">Need it sooner? Submit anyway and say so. Rushed requests may get a lighter plan.</p>
-            <div id="runwayNote"></div>
-          </div>
-        </aside>
-      </div>
-    </section>
-
+    <section class="view" id="view-new"><div id="newRequest"></div></section>
     <section class="view" id="view-tasks">
       <div class="card">
         <div class="card-head"><h2>My tasks</h2><label class="inline"><input type="checkbox" id="showDone"> Show completed</label></div>
         <div id="taskList"></div>
       </div>
     </section>
-
-    <section class="view" id="view-mine">
-      <div class="card"><div class="card-head"><h2>My requests</h2></div><div id="mineList"></div></div>
-    </section>
-
+    <section class="view" id="view-mine"><div class="card"><div class="card-head"><h2>My requests</h2></div><div id="mineList"></div></div></section>
     <section class="view" id="view-design">
       <div class="card">
         <div class="card-head">
           <h2>Design queue</h2>
-          <div class="seg" id="designFilter">
-            <button data-f="" class="on">All</button><button data-f="designer" id="designerFilterBtn">Designer</button><button data-f="in-house">In-house</button>
-          </div>
+          <div class="seg" id="designFilter"><button data-f="" class="on">All</button><button data-f="designer" id="designerFilterBtn">Designer</button><button data-f="in-house">In-house</button></div>
         </div>
         <div id="designList"></div>
       </div>
     </section>
-
+    <section class="view" id="view-calendar"><div class="card" id="calendar"></div></section>
     <section class="view" id="view-all">
       <div class="card">
         <div class="card-head">
           <h2>All requests</h2>
-          <input type="search" id="allSearch" placeholder="Search event, ministry, person, tier…">
+          <div class="filters">
+            <select id="allStatus"><option value="active">Active</option><option value="">Everything</option><option>Needs Review</option><option>Planned</option><option>Done</option><option>Cancelled</option><option>Declined</option></select>
+            <input type="search" id="allSearch" placeholder="Search event, ministry, person, tier…">
+          </div>
         </div>
         <div id="allList"></div>
       </div>
     </section>
-
     <section class="view" id="view-timeline">
       <div class="card">
         <div class="card-head"><h2>Team timeline</h2><select id="personFilter"><option value="">Everyone</option></select></div>
         <div id="timelineList"></div>
       </div>
     </section>
-
-    <section class="view" id="view-detail">
-      <button class="link" id="backBtn">← Back</button>
-      <div id="detail"></div>
-    </section>
+    <section class="view" id="view-admin"><div id="admin"></div></section>
+    <section class="view" id="view-detail"><button class="link" id="backBtn">← Back</button><div id="detail"></div></section>
   </main>
 
   <div class="modal" id="modal" hidden>

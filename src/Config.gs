@@ -1,58 +1,78 @@
 /**
- * Config.gs — where the app finds things in your existing Communications Hub.
+ * Config.gs — the app's data layout and default settings.
  *
- * The app only READS the hub spreadsheet. New requests, design feedback and
- * changes are submitted through your existing Google Forms, so all of your
- * current automation (tiers, timelines, Google Tasks, calendar, designer
- * brief emails) keeps running exactly as it does today.
+ * All data lives in one spreadsheet the app creates and protects
+ * ("Communications App — Data"). Nobody needs to open it; it's there for
+ * backups and exports. Day-to-day settings are edited in the app (Admin).
  */
 
-/** The Communications Hub spreadsheet. */
-var HUB_SPREADSHEET_ID = '1mc1sJEt76YJsyKz4t92aja0ggfwnc43IS0aheGX20h8';
-
-var TABS = {
-  CONFIG: 'Config',
+var TABLES = {
+  SETTINGS: 'Settings',
+  PEOPLE: 'People',
   REQUESTS: 'Requests',
-  TIMELINE: 'Timeline'
+  TASKS: 'Tasks',
+  ACTIVITY: 'Activity'
 };
 
-/**
- * Which row on the Config tab holds each form's EDIT link (…/forms/d/<id>/edit).
- * "Form edit link" already exists. Add the other two rows to Config once.
- */
-var FORM_CONFIG_KEYS = {
-  request: 'Form edit link',
-  feedback: 'Design feedback form edit link',
-  change: 'Change form edit link'
-};
-
-/** Config rows that say who plays each role. */
-var ROLE_CONFIG_KEYS = {
-  admin: 'Your email',
-  designer: 'Designer email',
-  pastor: 'Pastor email'
-};
-
-/**
- * Timeline "Owner" values that stand for a fixed person (looked up in Config).
- * "Ministry Leader" tasks belong to whoever submitted the request.
- */
-var OWNER_TO_ROLE = {
-  'michael': 'admin',
-  'designer': 'designer',
-  'pastor': 'pastor'
-};
-
-/** Form questions the app fills in automatically (matched on the question title). */
-var PREFILL = [
-  { pattern: /^your email$/i, from: 'email', lock: true },
-  { pattern: /^your name$/i, from: 'name' },
-  { pattern: /^request id$/i, from: 'requestId', lock: true }
+/** [key, header] — keys are used in code, headers are what the data file shows. */
+var COLUMNS = {};
+COLUMNS[TABLES.PEOPLE] = [
+  ['email', 'Email'], ['name', 'Name'], ['role', 'Role'], ['ministry', 'Ministry'], ['active', 'Active']
+];
+COLUMNS[TABLES.REQUESTS] = [
+  ['requestId', 'Request ID'], ['submitted', 'Submitted'], ['requester', 'Requester'], ['requesterEmail', 'Requester Email'],
+  ['ministry', 'Ministry'], ['requestType', 'Request Type'], ['title', 'Event / Initiative'], ['eventDate', 'Event Date'],
+  ['suggestedTier', 'Suggested Tier'], ['tier', 'Final Tier'], ['mode', 'Mode'], ['status', 'Status'], ['flags', 'Flags'],
+  ['whoFor', 'Who For'], ['reach', 'Reach'], ['bridge', 'Bridge Event'], ['nextStepType', 'Next Step Type'],
+  ['story', 'Story'], ['oneNextStep', 'One Next Step'], ['timeLocation', 'Event Time & Location'],
+  ['registration', 'PCO Registration'], ['details', 'Details'], ['needsDesign', 'Needs Design'],
+  ['designItems', 'Design Items'], ['designSpecs', 'Design Specs'], ['textToInclude', 'Text To Include'],
+  ['textFinal', 'Text Final'], ['inspiration', 'Inspiration'], ['anythingElse', 'Anything Else'],
+  ['bigIdea', 'Big Idea'], ['scripture', 'Scripture'], ['seriesWeeks', 'Series Weeks'], ['weeklyTitles', 'Weekly Titles'],
+  ['visualDirection', 'Visual Direction'], ['designFolder', 'Design Folder'], ['calendarIds', 'Calendar IDs'],
+  ['messageToRequester', 'Message to Requester'], ['requestedNewDate', 'Requested New Date'],
+  ['designState', 'Design State'], ['designStateSince', 'Design State Since'], ['designRound', 'Design Round'],
+  ['heldFeedback', 'Held Feedback'], ['results', 'Results (post-event)'], ['approvedAt', 'Approved'], ['updatedAt', 'Updated']
+];
+COLUMNS[TABLES.TASKS] = [
+  ['taskKey', 'Task Key'], ['requestId', 'Request ID'], ['dueDate', 'Due Date'], ['channel', 'Channel'], ['task', 'Task'],
+  ['owner', 'Owner'], ['assigneeEmail', 'Assigned Email'], ['status', 'Status'], ['notes', 'Notes'], ['key', 'Workflow Key'],
+  ['completedAt', 'Completed'], ['completedBy', 'Completed By']
+];
+COLUMNS[TABLES.ACTIVITY] = [
+  ['at', 'When'], ['requestId', 'Request ID'], ['by', 'By'], ['type', 'Type'], ['text', 'Text'], ['link', 'Link']
 ];
 
-/** Where the link to uploaded attachments is added (first visible match wins). */
-var ATTACHMENT_TARGETS = [/inspiration or reference links/i, /anything else/i];
+var ROLES = { ADMIN: 'Communications', DESIGNER: 'Designer', PASTOR: 'Pastor', STAFF: 'Staff' };
 
-var DONE_TASK = /^done$/i;
-var CLOSED_REQUEST = /^(done|cancelled|declined)$/i;
+/** Template owners → the role that fills them ('Leader' = the requester). */
+var OWNER_ROLE = { Comms: ROLES.ADMIN, Designer: ROLES.DESIGNER, Pastor: ROLES.PASTOR };
+
+var STATUS = {
+  NEEDS_REVIEW: 'Needs Review', NEEDS_INFO: 'Needs Info', PLANNED: 'Planned',
+  DECLINED: 'Declined', DONE: 'Done', CANCELLED: 'Cancelled'
+};
+var TASK = { OPEN: 'Not started', DONE: 'Done', CANCELLED: 'Cancelled' };
+var DESIGN = { BRIEFED: 'Briefed', IN_REVIEW: 'In Review', REVISING: 'Revising', HELD: 'Feedback Held', APPROVED: 'Approved', DELIVERED: 'Delivered' };
+
+/** [setting, default, help] — editable in the app under Admin. */
+var DEFAULT_SETTINGS = [
+  ['Brand header text', 'Calvary Communications', 'Shown at the top of the app and emails.'],
+  ['Brand header color', '#00b5e2', ''],
+  ['Brand header text color', '#ffffff', ''],
+  ['Brand accent color', '#00b5e2', ''],
+  ['Brand font', 'Georgia', ''],
+  ['Brand header font', 'Montserrat', ''],
+  ['Brand footer text', '', 'Footer line on every email.'],
+  ['Designer handles', 'Level 1, Series', 'Tiers the staff designer designs; everything else is designed in-house.'],
+  ['Sprint cap per year', '6', 'Maximum Level 1 Sprints per year.'],
+  ['Included revision rounds', '2', 'Rounds of design changes before feedback is held for approval.'],
+  ['Revision turnaround days', '3', 'Days the designer gets for each round of changes.'],
+  ['Review window days', '3', 'Days the requester gets to review a draft.'],
+  ['Master calendar ID', '', 'Google Calendar ID for the shared Master calendar (…@group.calendar.google.com).'],
+  ['Drive parent folder', '', 'Drive folder link where each request gets its own folder.'],
+  ['Ministries', 'Guest Services, LifeGroups, Calvary Kids, Calvary Students, Calvary Young Adults, Worship / Production, NextGen Groups, Calvary Cares, Pastoral / Staff, Other', 'Comma-separated; used in the request form.'],
+  ['Send weekly digest', 'Yes', 'Monday-morning email listing each person\'s tasks for the week.']
+];
+
 var MAX_FILE_BYTES = 10 * 1024 * 1024;
