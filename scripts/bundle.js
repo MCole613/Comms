@@ -11,7 +11,7 @@ const src = path.join(root, 'src');
 const dist = path.join(root, 'dist');
 
 function build() {
-  const order = ['Config.gs', 'Plan.gs', 'FormDefs.gs', 'FormLogic.gs', 'Data.gs', 'People.gs', 'Requests.gs',
+  const order = ['Config.gs', 'Plan.gs', 'FormDefs.gs', 'FormLogic.gs', 'Data.gs', 'People.gs', 'Auth.gs', 'Requests.gs',
     'Design.gs', 'Calendar.gs', 'Notify.gs', 'Setup.gs', 'Import.gs', 'Code.gs'];
   const all = fs.readdirSync(src).filter(f => f.endsWith('.gs'));
   const missing = all.filter(f => !order.includes(f));

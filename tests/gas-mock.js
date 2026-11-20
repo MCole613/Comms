@@ -30,6 +30,7 @@ function makeSheet(name) {
       return range;
     },
     appendRow(r) { data.push(r.slice()); },
+    deleteRow(n) { data.splice(n - 1, 1); },
     setFrozenRows() {},
     protect: () => ({ setDescription() { return this; }, getEditors: () => [], removeEditor() {}, canDomainEdit: () => false, setDomainEdit() {} })
   };
@@ -99,6 +100,8 @@ function createContext({ userEmail, now, owner = 'admin@example.org', sources })
   const mail = [];
   const props = {};
   const spreadsheets = {};
+  const cache = {};
+  const tokens = {};
   let ssN = 0;
   let currentUser = userEmail;
   let clock = now;
@@ -128,8 +131,14 @@ function createContext({ userEmail, now, owner = 'admin@example.org', sources })
         return fmt.replace(/yyyy|MM|dd|HH|mm/g, k => m[k]);
       },
       base64Decode: (s) => Buffer.from(s, 'base64'),
-      newBlob: (bytes, mimeType, name) => ({ bytes, mimeType, name })
+      newBlob: (bytes, mimeType, name) => ({ bytes, mimeType, name }),
+      getUuid: () => require('node:crypto').randomUUID(),
+      DigestAlgorithm: { SHA_256: 'sha256' },
+      computeDigest: (alg, s) => [...require('node:crypto').createHash(alg).update(String(s)).digest()].map(b => (b > 127 ? b - 256 : b))
     },
+    CacheService: { getScriptCache: () => ({
+      get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, remove: (k) => { delete cache[k]; }
+    }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     MailApp: { sendEmail: (m) => mail.push(m) },
     DriveApp: drive.api,
@@ -151,9 +160,13 @@ function createContext({ userEmail, now, owner = 'admin@example.org', sources })
   }
   Object.assign(ctx, {
     __drive: drive, __calendar: calendar, __mail: mail, __spreadsheets: spreadsheets,
+    // Signs this person in (as the email-code flow would) and makes them the caller.
     __setUser: (e) => { currentUser = e; },
+    __token: () => tokens[currentUser] || (tokens[currentUser] = ctx.createSession_(currentUser)),
+    __api: (name, ...args) => ctx.call(ctx.__token(), name, args),
+    __cache: cache,
     __setNow: (d) => { clock = d; },
-    __call: (name, ...args) => JSON.parse(JSON.stringify(ctx[name](...args))),
+    __call: (name, ...args) => JSON.parse(JSON.stringify(name.indexOf('api') === 0 && name !== 'apiRequestCode' && name !== 'apiVerifyCode' ? ctx.__api(name, ...args) : ctx[name](...args))),
     __table: (name) => ctx.readTable_(name)
   });
   return ctx;

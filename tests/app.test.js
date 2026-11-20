@@ -50,7 +50,7 @@ test('setup creates the locked data file and makes the owner an admin', () => {
 test('new staff must give their name before submitting', () => {
   const { g } = app();
   g.__setUser(KARA);
-  assert.throws(() => g.apiSubmitRequest(PROMO, []), /tell us your name/);
+  assert.throws(() => g.__api('apiSubmitRequest', PROMO, []), /tell us your name/);
   g.__call('apiSetMyProfile', 'Kara Kids', 'Calvary Kids');
   assert.equal(g.__call('apiBootstrap').user.name, 'Kara Kids');
 });
@@ -78,9 +78,9 @@ test('validation: required answers, real choices, no past dates', () => {
   const { g } = app();
   asKara(g);
   const missing = { ...PROMO }; delete missing['promo.story'];
-  assert.throws(() => g.apiSubmitRequest(missing, []), /Share one story/);
-  assert.throws(() => g.apiSubmitRequest({ ...PROMO, 'promo.reach': '200%' }, []), /not an option/);
-  assert.throws(() => g.apiSubmitRequest({ ...PROMO, 'promo.eventDate': '2026-01-01' }, []), /already passed/);
+  assert.throws(() => g.__api('apiSubmitRequest', missing, []), /Share one story/);
+  assert.throws(() => g.__api('apiSubmitRequest', { ...PROMO, 'promo.reach': '200%' }, []), /not an option/);
+  assert.throws(() => g.__api('apiSubmitRequest', { ...PROMO, 'promo.eventDate': '2026-01-01' }, []), /already passed/);
   assert.equal(g.__table('Requests').length, 0);
 });
 
@@ -88,7 +88,7 @@ test('admin approval builds the plan, assigns people, syncs the calendar', () =>
   const { g } = app();
   asKara(g);
   g.__call('apiSubmitRequest', PROMO, []);
-  assert.throws(() => g.apiReview('REQ-2026-001', { action: 'approve' }), /Only the communications team/);
+  assert.throws(() => g.__api('apiReview', 'REQ-2026-001', { action: 'approve' }), /Only the communications team/);
 
   g.__setUser(ADMIN);
   g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3', message: 'Looks great!' });
@@ -111,7 +111,7 @@ test('needs-info and decline notify the requester', () => {
   asKara(g);
   g.__call('apiSubmitRequest', PROMO, []);
   g.__setUser(ADMIN);
-  assert.throws(() => g.apiReview('REQ-2026-001', { action: 'needsInfo' }), /what information/);
+  assert.throws(() => g.__api('apiReview', 'REQ-2026-001', { action: 'needsInfo' }), /what information/);
   g.__call('apiReview', 'REQ-2026-001', { action: 'needsInfo', message: 'What age range?' });
   assert.equal(g.__table('Requests')[0].status, 'Needs Info');
   assert.ok(g.__mail.some(m => m.to === KARA && /More info needed/.test(m.subject)));
@@ -128,7 +128,7 @@ test('Level 1 sprint cap is enforced unless overridden', () => {
   g.__call('apiSubmitRequest', { ...big, 'promo.title': 'Second big event' }, []);
   g.__setUser(ADMIN);
   g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 1' });
-  assert.throws(() => g.apiReview('REQ-2026-002', { action: 'approve', tier: 'Level 1' }), /^Error: CAP: 1 of 1/);
+  assert.throws(() => g.__api('apiReview', 'REQ-2026-002', { action: 'approve', tier: 'Level 1' }), /^Error: CAP: 1 of 1/);
   g.__call('apiReview', 'REQ-2026-002', { action: 'approve', tier: 'Level 1', overrideCap: true });
   assert.equal(g.__table('Requests')[1].status, 'Planned');
   assert.equal(Object.keys(g.__calendar.events).length, 4, 'event + sprint window each');
@@ -147,7 +147,7 @@ test('design rounds: draft → feedback → revision → held → released → a
 
   // Kara can't deliver designs.
   g.__setUser(KARA);
-  assert.throws(() => g.apiUploadFiles(id, file, 'draft'), /Only the designer/);
+  assert.throws(() => g.__api('apiUploadFiles', id, file, 'draft'), /Only the designer/);
 
   g.__setUser(ADMIN);
   g.__call('apiUploadFiles', id, file, 'draft');
@@ -163,7 +163,7 @@ test('design rounds: draft → feedback → revision → held → released → a
   assert.equal(state().designRound, '1');
   assert.equal(open('revision')[0].task, 'Round 1 revisions: More blue please.');
   assert.equal(open('revision')[0].assigneeEmail, ADMIN);
-  assert.throws(() => g.apiApproveDesign(id), /no draft waiting/);
+  assert.throws(() => g.__api('apiApproveDesign', id), /no draft waiting/);
 
   g.__setUser(ADMIN);
   g.__call('apiUploadFiles', id, file, 'draft');
@@ -228,7 +228,7 @@ test('date change on a planned request waits for admin, then shifts open tasks',
   assert.equal(res.pendingDate, '2027-03-19');
   assert.equal(g.__table('Requests')[0].eventDate, '2027-03-12', 'not applied yet');
   assert.ok(g.__mail.some(m => m.to === ADMIN && /Change request/.test(m.subject)));
-  assert.throws(() => g.apiApplyNewDate('REQ-2026-001'), /Only the communications team/);
+  assert.throws(() => g.__api('apiApplyNewDate', 'REQ-2026-001'), /Only the communications team/);
 
   g.__setUser(ADMIN);
   g.__call('apiApplyNewDate', 'REQ-2026-001');
@@ -261,7 +261,7 @@ test('tasks: permissions, review steps, request completes when everything is don
   const karaTask = tasks.find(t => t.assigneeEmail === KARA);
   const adminTask = tasks.find(t => t.assigneeEmail === ADMIN);
   g.__setUser(KARA);
-  assert.throws(() => g.apiSetTaskDone(adminTask.taskKey, true), /Only the person assigned/);
+  assert.throws(() => g.__api('apiSetTaskDone', adminTask.taskKey, true), /Only the person assigned/);
   g.__call('apiSetTaskDone', karaTask.taskKey, true);
   assert.equal(g.__call('apiMyTasks').find(t => t.taskKey === karaTask.taskKey).status, 'Done');
   g.__setUser(ADMIN);
@@ -297,10 +297,10 @@ test('home, design queue, calendar and detail views', () => {
 test('admin-only settings and people', () => {
   const { g } = app();
   asKara(g);
-  assert.throws(() => g.apiAdminData(), /Only the communications team/);
-  assert.throws(() => g.apiSaveSettings({ 'Sprint cap per year': '99' }), /Only the communications team/);
+  assert.throws(() => g.__api('apiAdminData'), /Only the communications team/);
+  assert.throws(() => g.__api('apiSaveSettings', { 'Sprint cap per year': '99' }), /Only the communications team/);
   g.__setUser(ADMIN);
-  assert.throws(() => g.apiSavePerson({ email: ADMIN, role: 'Staff' }), /own admin role/);
+  assert.throws(() => g.__api('apiSavePerson', { email: ADMIN, role: 'Staff' }), /own admin role/);
   g.__call('apiSaveSettings', { 'Sprint cap per year': '8', 'Not a setting': 'x' });
   assert.equal(g.readSettings_()['Sprint cap per year'], '8');
   assert.equal(g.readSettings_()['Not a setting'], undefined);

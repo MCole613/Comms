@@ -2,7 +2,9 @@
 
 One app for all staff communications. It replaces the Google Form, the Communications Hub spreadsheet and Google Tasks. Leaders submit requests, the communications team reviews them and assigns a tier, the app builds the timeline and assigns every task, the designer gets the brief, and design review rounds happen inside the app.
 
-It runs as a web app in the church's Google account. It's free, staff sign in with their church Google login, emails go out through Gmail, and approved requests sync to the shared Master calendar.
+It runs as a web app in the church's Google account. It's free, emails go out through Gmail, and approved requests sync to the shared Master calendar.
+
+**Signing in:** people enter their email and get a 6-digit code, then stay signed in on that device for 90 days. It works for anyone, with or without a church or Google account. Only people on the Admin → People list can sign in, plus anyone at the domains in *Self sign-up domains* (set to your church domain at setup). Setting someone to Active: No removes their access right away.
 
 ## How a request flows
 
@@ -33,8 +35,10 @@ Use the Google account that should own the system and send its emails (yours, or
    Click 💾 **Save**.
 3. Choose **`setup`** in the function dropdown, click **Run**, and approve the permissions. This creates the locked data file, makes you an admin, and schedules the Monday digest.
 4. Choose **`importFromHub`** and click **Run**. This brings over everything from the old hub: settings (brand, sprint cap, rounds, calendar, Drive folder, ministries), people and roles, all requests, timeline tasks and design feedback history. It can safely be re-run.
-5. Choose **Deploy → New deployment → Web app**, set *Execute as* to **Me** and *Who has access* to **Anyone within Calvary**, then share the link.
-6. Open **Admin** in the app and check *People* and *Settings*. Staff who aren't listed are added automatically the first time they open the app.
+5. Choose **Deploy → New deployment → Web app**, set *Execute as* to **Me** and *Who has access* to **Anyone**, then share the link. *Anyone* lets people outside the church reach the sign-in page; the app's own sign-in decides who gets in.
+6. Open **Admin** in the app and add the people who should have access, including volunteers and outside designers. Check *Settings* too.
+
+To put it on the church website, link to the app's web address. It can also go in an HTML embed block, such as ChurchCo's: `<iframe src="APP-LINK" style="width:100%;height:900px;border:0"></iframe>`.
 
 When the app is live, turn off the old form (*Responses → Accepting responses*) and the hub's triggers, so requests only come in one way.
 

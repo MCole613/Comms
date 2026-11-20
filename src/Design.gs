@@ -24,6 +24,12 @@ function ensureRequestFolder_(r, settings, people) {
   emailsWithRole_(ROLES.DESIGNER, people).forEach(function (e) {
     try { folder.addEditor(e); } catch (err) { console.warn('Share with ' + e + ': ' + err.message); }
   });
+  // People outside the church domain can't use the domain link, so share with them directly.
+  var domains = splitList_(settings['Self sign-up domains']).map(lc_);
+  var requester = lc_(r.requesterEmail);
+  if (requester && domains.indexOf(requester.split('@')[1]) < 0) {
+    try { folder.addViewer(requester); } catch (err) { console.warn('Share with ' + requester + ': ' + err.message); }
+  }
   withLock_(function () {
     var fresh = findRequest_(r.requestId);
     fresh.designFolder = folder.getUrl();

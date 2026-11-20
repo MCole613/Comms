@@ -18,7 +18,8 @@ var TABLES = {
   PEOPLE: 'People',
   REQUESTS: 'Requests',
   TASKS: 'Tasks',
-  ACTIVITY: 'Activity'
+  ACTIVITY: 'Activity',
+  SESSIONS: 'Sessions'
 };
 
 /** [key, header] — keys are used in code, headers are what the data file shows. */
@@ -45,6 +46,9 @@ COLUMNS[TABLES.TASKS] = [
   ['taskKey', 'Task Key'], ['requestId', 'Request ID'], ['dueDate', 'Due Date'], ['channel', 'Channel'], ['task', 'Task'],
   ['owner', 'Owner'], ['assigneeEmail', 'Assigned Email'], ['status', 'Status'], ['notes', 'Notes'], ['key', 'Workflow Key'],
   ['completedAt', 'Completed'], ['completedBy', 'Completed By']
+];
+COLUMNS[TABLES.SESSIONS] = [
+  ['tokenHash', 'Token Hash'], ['email', 'Email'], ['created', 'Created'], ['expires', 'Expires'], ['revoked', 'Revoked']
 ];
 COLUMNS[TABLES.ACTIVITY] = [
   ['at', 'When'], ['requestId', 'Request ID'], ['by', 'By'], ['type', 'Type'], ['text', 'Text'], ['link', 'Link']
@@ -79,6 +83,7 @@ var DEFAULT_SETTINGS = [
   ['Master calendar ID', '', 'Google Calendar ID for the shared Master calendar (…@group.calendar.google.com).'],
   ['Drive parent folder', '', 'Drive folder link where each request gets its own folder.'],
   ['Ministries', 'Guest Services, LifeGroups, Calvary Kids, Calvary Students, Calvary Young Adults, Worship / Production, NextGen Groups, Calvary Cares, Pastoral / Staff, Other', 'Comma-separated; used in the request form.'],
+  ['Self sign-up domains', '', 'Anyone with an email at these domains (comma-separated, e.g. calvaryirwin.com) can sign in without being added. Everyone else must be on the People list.'],
   ['Send weekly digest', 'Yes', 'Monday-morning email listing each person\'s tasks for the week.']
 ];
 
@@ -1253,8 +1258,8 @@ function roleHolder_(role, people) {
 }
 
 function currentUser_(people) {
-  var email = lc_(Session.getActiveUser().getEmail());
-  if (!email) throw new Error('Could not identify you. Please sign in with your church Google account.');
+  if (!CURRENT_SESSION_) throw new Error('SIGNIN: Please sign in.');
+  var email = lc_(CURRENT_SESSION_.email);
   var p = personByEmail_(email, people || readPeople_());
   var role = p ? p.role : ROLES.STAFF;
   return {
@@ -1262,7 +1267,7 @@ function currentUser_(people) {
     name: p ? p.name : '',
     ministry: p ? p.ministry : '',
     role: role,
-    known: !!p,
+    known: !!(p && p.name),
     isAdmin: lc_(role) === lc_(ROLES.ADMIN),
     isDesigner: lc_(role) === lc_(ROLES.DESIGNER),
     isPastor: lc_(role) === lc_(ROLES.PASTOR)
@@ -1285,6 +1290,161 @@ function nameOf_(email, people) {
 
 function emailsWithRole_(role, people) {
   return people.filter(function (p) { return lc_(p.role) === lc_(role); }).map(function (p) { return p.email; });
+}
+
+// ===== Auth.gs =====
+
+/**
+ * Auth.gs — email sign-in codes, so people outside the church Google domain
+ * (volunteers, contractors, outside designers) can use the app.
+ *
+ *  1. Someone enters their email. If they're on the People list (or their
+ *     address is in "Self sign-up domains"), the app emails a 6-digit code.
+ *  2. They enter the code and get a session token, kept on their device for
+ *     90 days. Every call from the page goes through call(), which checks it.
+ */
+
+var SESSION_DAYS = 90;
+var CODE_MINUTES = 10;
+var CODE_TRIES = 5;
+var CODES_PER_HOUR = 5;
+
+/** Set by call() for the length of one request. */
+var CURRENT_SESSION_ = null;
+
+function hash_(s) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s))
+    .map(function (b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
+}
+
+function validEmail_(email) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+}
+
+/** May this email sign in? People list (active) or a self sign-up domain. */
+function canSignIn_(email, people, settings) {
+  if (personByEmail_(email, people)) return true;
+  // Someone the admin deactivated stays out, even at a self sign-up domain.
+  var listed = readTable_(TABLES.PEOPLE).some(function (x) { return lc_(x.email) === email; });
+  if (listed) return false;
+  var domain = email.split('@')[1];
+  return splitList_(settings['Self sign-up domains']).map(lc_).indexOf(domain) >= 0;
+}
+
+/* ---------------- public sign-in API (no session needed) ---------------- */
+
+function apiRequestCode(email) {
+  email = lc_(email);
+  if (!validEmail_(email)) throw new Error('Enter a valid email address.');
+  var cache = CacheService.getScriptCache();
+  var rlKey = 'rl:' + hash_(email);
+  var sent = Number(cache.get(rlKey)) || 0;
+  if (sent >= CODES_PER_HOUR) throw new Error('Too many codes requested. Please wait an hour and try again.');
+
+  var settings = readSettings_();
+  if (canSignIn_(email, readPeople_(), settings)) {
+    var code = String(Math.floor(100000 + Math.random() * 900000));
+    cache.put('otp:' + hash_(email), JSON.stringify({ h: hash_(email + ':' + code), t: 0 }), CODE_MINUTES * 60);
+    cache.put(rlKey, String(sent + 1), 3600);
+    send_(settings, {
+      to: email,
+      subject: 'Your sign-in code: ' + code,
+      html: '<p>Your code for <b>' + esc_(settings['Brand header text'] || 'the Communications app') + '</b> is:</p>' +
+        '<p style="font:700 28px Helvetica,Arial,sans-serif;letter-spacing:6px">' + code + '</p>' +
+        '<p style="color:#66727f">It expires in ' + CODE_MINUTES + ' minutes. If you didn\'t ask for it, you can ignore this email.</p>'
+    });
+  }
+  // Same answer either way, so the page doesn't reveal who has access.
+  return { ok: true };
+}
+
+function apiVerifyCode(email, code) {
+  email = lc_(email);
+  code = String(code || '').replace(/\D/g, '');
+  var cache = CacheService.getScriptCache();
+  var key = 'otp:' + hash_(email);
+  var raw = cache.get(key);
+  if (!raw) throw new Error('That code has expired. Request a new one.');
+  var rec = JSON.parse(raw);
+  if (rec.h !== hash_(email + ':' + code)) {
+    rec.t++;
+    if (rec.t >= CODE_TRIES) { cache.remove(key); throw new Error('Too many wrong tries. Request a new code.'); }
+    cache.put(key, JSON.stringify(rec), CODE_MINUTES * 60);
+    throw new Error('That code isn\'t right. Check the email and try again.');
+  }
+  cache.remove(key);
+
+  var token = createSession_(email);
+  // Self sign-up: add them to People so they show up for admins.
+  withLock_(function () {
+    if (!readTable_(TABLES.PEOPLE).some(function (p) { return lc_(p.email) === email; })) {
+      appendRows_(TABLES.PEOPLE, [{ email: email, name: '', role: ROLES.STAFF, ministry: '', active: 'Yes' }]);
+    }
+  });
+  return { token: token };
+}
+
+function createSession_(email) {
+  var token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  var now = new Date();
+  var expires = new Date(now.getTime() + SESSION_DAYS * 86400000);
+  withLock_(function () {
+    appendRows_(TABLES.SESSIONS, [{
+      tokenHash: hash_(token), email: lc_(email), created: nowText_(),
+      expires: Utilities.formatDate(expires, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm')
+    }]);
+  });
+  return token;
+}
+
+function sessionFor_(token) {
+  if (!token || String(token).length < 32) return null;
+  var h = hash_(token);
+  var now = nowText_();
+  var s = readTable_(TABLES.SESSIONS).filter(function (x) { return x.tokenHash === h; })[0];
+  if (!s || s.revoked === 'Yes' || s.expires < now) return null;
+  return s;
+}
+
+/** Sign out this device. */
+function apiSignOut() {
+  var s = CURRENT_SESSION_;
+  if (!s || !s._row) return { ok: true };
+  withLock_(function () { s.revoked = 'Yes'; updateRow_(TABLES.SESSIONS, s); });
+  return { ok: true };
+}
+
+/* ---------------- the one entry point the page calls ---------------- */
+
+/**
+ * Every signed-in request goes through here: call(token, 'apiHome', []).
+ * The api* functions refuse to run without a session set by this function.
+ */
+function call(token, name, args) {
+  var api = apiMap_();
+  if (!Object.prototype.hasOwnProperty.call(api, name)) throw new Error('Unknown action.');
+  var s = sessionFor_(token);
+  if (!s) throw new Error('SIGNIN: Please sign in again.');
+  var people = readPeople_();
+  var p = personByEmail_(s.email, people);
+  // Removed or deactivated people lose access straight away.
+  if (!p && !canSignIn_(s.email, people, readSettings_())) throw new Error('SIGNIN: Your access has been removed. Ask the communications team.');
+  CURRENT_SESSION_ = s;
+  try {
+    return api[name].apply(null, args || []);
+  } finally {
+    CURRENT_SESSION_ = null;
+  }
+}
+
+/** Removes expired sessions (runs with the weekly digest). */
+function cleanupSessions_() {
+  var now = nowText_();
+  var sh = sheet_(TABLES.SESSIONS);
+  var rows = readTable_(TABLES.SESSIONS);
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].expires < now || rows[i].revoked === 'Yes') sh.deleteRow(rows[i]._row);
+  }
 }
 
 // ===== Requests.gs =====
@@ -1707,6 +1867,12 @@ function ensureRequestFolder_(r, settings, people) {
   emailsWithRole_(ROLES.DESIGNER, people).forEach(function (e) {
     try { folder.addEditor(e); } catch (err) { console.warn('Share with ' + e + ': ' + err.message); }
   });
+  // People outside the church domain can't use the domain link, so share with them directly.
+  var domains = splitList_(settings['Self sign-up domains']).map(lc_);
+  var requester = lc_(r.requesterEmail);
+  if (requester && domains.indexOf(requester.split('@')[1]) < 0) {
+    try { folder.addViewer(requester); } catch (err) { console.warn('Share with ' + requester + ': ' + err.message); }
+  }
   withLock_(function () {
     var fresh = findRequest_(r.requestId);
     fresh.designFolder = folder.getUrl();
@@ -2213,6 +2379,7 @@ function notifyFinalDelivered_(r, s, people) {
 /* ---------------- weekly digest (time-driven) ---------------- */
 
 function sendWeeklyDigest() {
+  try { cleanupSessions_(); } catch (e) { console.warn('Session cleanup: ' + e.message); }
   var s = readSettings_();
   if (/^(no|false|n)$/i.test(s['Send weekly digest'] || '')) return;
   var people = readPeople_();
@@ -2261,7 +2428,7 @@ function setup() {
   db_.cache = ss;
 
   ensureTable_(ss, TABLES.SETTINGS, ['Setting', 'Value', 'What it does'], DEFAULT_SETTINGS);
-  [TABLES.PEOPLE, TABLES.REQUESTS, TABLES.TASKS, TABLES.ACTIVITY].forEach(function (name) {
+  [TABLES.PEOPLE, TABLES.REQUESTS, TABLES.TASKS, TABLES.ACTIVITY, TABLES.SESSIONS].forEach(function (name) {
     ensureTable_(ss, name, COLUMNS[name].map(function (c) { return c[1]; }), []);
   });
   var blank = ss.getSheetByName('Sheet1');
@@ -2271,6 +2438,11 @@ function setup() {
   var me = lc_(Session.getEffectiveUser().getEmail());
   if (me && !personByEmail_(me, readPeople_())) {
     appendRows_(TABLES.PEOPLE, [{ email: me, name: me.split('@')[0], role: ROLES.ADMIN, ministry: 'Communications', active: 'Yes' }]);
+  }
+
+  // Staff at the owner's domain (e.g. calvaryirwin.com) can sign in without being added.
+  if (me && !readSettings_()['Self sign-up domains'] && !/@gmail\.com$/.test(me)) {
+    writeSettings_({ 'Self sign-up domains': me.split('@')[1] });
   }
 
   // Lock the data file: only the app (running as its owner) edits it.
@@ -2513,7 +2685,9 @@ function doGet() {
   try { s = readSettings_(); } catch (e) { /* not set up yet: the page shows the error */ }
   var t = HtmlService.createTemplateFromFile('Index');
   t.brand = brandOf_(s);
-  return t.evaluate().setTitle(t.brand.headerText).addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return t.evaluate().setTitle(t.brand.headerText).addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    // Allows embedding on the church website (e.g. a ChurchCo HTML Embed block).
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function include(name) { return HtmlService.createHtmlOutputFromFile(name).getContent(); }
@@ -2753,4 +2927,21 @@ function apiSavePerson(p) {
     if (existing) updateRow_(TABLES.PEOPLE, rec); else appendRows_(TABLES.PEOPLE, [rec]);
     return { ok: true };
   });
+}
+
+/* ---------------- what the page may call (through call()) ---------------- */
+
+/** Built on demand: files load in order, so a top-level map could miss later files. */
+function apiMap_() {
+  return {
+    apiBootstrap: apiBootstrap, apiSetMyProfile: apiSetMyProfile, apiHome: apiHome, apiMyTasks: apiMyTasks,
+    apiRequests: apiRequests, apiRequestDetail: apiRequestDetail, apiTeamTimeline: apiTeamTimeline,
+    apiDesignQueue: apiDesignQueue, apiCalendar: apiCalendar, apiAdminData: apiAdminData,
+    apiSaveSettings: apiSaveSettings, apiSavePerson: apiSavePerson,
+    apiSubmitRequest: apiSubmitRequest, apiReview: apiReview, apiRequestChange: apiRequestChange,
+    apiApplyNewDate: apiApplyNewDate, apiSaveResults: apiSaveResults, apiSetStatus: apiSetStatus,
+    apiSetTaskDone: apiSetTaskDone, apiReassignTask: apiReassignTask,
+    apiUploadFiles: apiUploadFiles, apiApproveDesign: apiApproveDesign, apiDesignFeedback: apiDesignFeedback,
+    apiReleaseHeldFeedback: apiReleaseHeldFeedback, apiSignOut: apiSignOut
+  };
 }

@@ -11,7 +11,8 @@ var TABLES = {
   PEOPLE: 'People',
   REQUESTS: 'Requests',
   TASKS: 'Tasks',
-  ACTIVITY: 'Activity'
+  ACTIVITY: 'Activity',
+  SESSIONS: 'Sessions'
 };
 
 /** [key, header] — keys are used in code, headers are what the data file shows. */
@@ -38,6 +39,9 @@ COLUMNS[TABLES.TASKS] = [
   ['taskKey', 'Task Key'], ['requestId', 'Request ID'], ['dueDate', 'Due Date'], ['channel', 'Channel'], ['task', 'Task'],
   ['owner', 'Owner'], ['assigneeEmail', 'Assigned Email'], ['status', 'Status'], ['notes', 'Notes'], ['key', 'Workflow Key'],
   ['completedAt', 'Completed'], ['completedBy', 'Completed By']
+];
+COLUMNS[TABLES.SESSIONS] = [
+  ['tokenHash', 'Token Hash'], ['email', 'Email'], ['created', 'Created'], ['expires', 'Expires'], ['revoked', 'Revoked']
 ];
 COLUMNS[TABLES.ACTIVITY] = [
   ['at', 'When'], ['requestId', 'Request ID'], ['by', 'By'], ['type', 'Type'], ['text', 'Text'], ['link', 'Link']
@@ -72,6 +76,7 @@ var DEFAULT_SETTINGS = [
   ['Master calendar ID', '', 'Google Calendar ID for the shared Master calendar (…@group.calendar.google.com).'],
   ['Drive parent folder', '', 'Drive folder link where each request gets its own folder.'],
   ['Ministries', 'Guest Services, LifeGroups, Calvary Kids, Calvary Students, Calvary Young Adults, Worship / Production, NextGen Groups, Calvary Cares, Pastoral / Staff, Other', 'Comma-separated; used in the request form.'],
+  ['Self sign-up domains', '', 'Anyone with an email at these domains (comma-separated, e.g. calvaryirwin.com) can sign in without being added. Everyone else must be on the People list.'],
   ['Send weekly digest', 'Yes', 'Monday-morning email listing each person\'s tasks for the week.']
 ];
 

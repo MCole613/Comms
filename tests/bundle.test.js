@@ -30,19 +30,19 @@ test('the bundled Code.gs runs the whole flow on its own', () => {
   const g = createContext({ userEmail: ADMIN, now: new Date(2026, 10, 20, 9), owner: ADMIN, sources: [path.join(dist, 'Code.gs')] });
   g.setup();
   g.__setUser(KARA);
-  g.apiSetMyProfile('Kara Kids', 'Calvary Kids');
-  const id = g.apiSubmitRequest({
+  g.__api('apiSetMyProfile', 'Kara Kids', 'Calvary Kids');
+  const id = g.__api('apiSubmitRequest', {
     ministry: 'Calvary Kids', kind: 'Graphic design only (t-shirt, logo, flyer, etc. - no communications plan)',
     'design.title': 'Movie Night graphic', 'design.whoFor': 'Kids and parents', 'design.designItems': ['Social graphic'],
     'design.eventDate': '2027-01-29', 'design.textFinal': 'Yes'
   }, []).requestId;
   g.__setUser(ADMIN);
-  g.apiReview(id, { action: 'approve', tier: 'Design' });
+  g.__api('apiReview', id, { action: 'approve', tier: 'Design' });
   const tasks = g.__table('Tasks');
   assert.deepEqual([...tasks.map(t => t.dueDate)], ['2027-01-08', '2027-01-11', '2027-01-22'], '21-day design timeline');
-  g.apiUploadFiles(id, [{ name: 'draft.png', data: 'eA==' }], 'draft');
+  g.__api('apiUploadFiles', id, [{ name: 'draft.png', data: 'eA==' }], 'draft');
   g.__setUser(KARA);
-  g.apiApproveDesign(id);
+  g.__api('apiApproveDesign', id);
   assert.equal(g.__table('Requests')[0].designState, 'Approved');
   assert.equal(typeof g.importFromHub, 'function');
   assert.equal(typeof g.doGet, 'function');

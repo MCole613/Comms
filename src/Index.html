@@ -31,11 +31,12 @@
       <button class="tab" data-view="timeline">Timeline</button>
       <button class="tab" data-view="admin" data-role="admin" hidden>Admin</button>
     </nav>
-    <div class="who" id="who"></div>
+    <div class="who"><span id="who"></span> <button class="link-ink" id="signOut" type="button">Sign out</button></div>
   </header>
 
   <main>
     <div id="notice" class="notice" hidden></div>
+    <section class="view" id="view-login"><div id="login"></div></section>
     <section class="view active" id="view-home"><div id="home"><div class="spinner">Loading…</div></div></section>
     <section class="view" id="view-new"><div id="newRequest"></div></section>
     <section class="view" id="view-tasks">

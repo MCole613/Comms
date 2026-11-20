@@ -16,7 +16,7 @@ function setup() {
   db_.cache = ss;
 
   ensureTable_(ss, TABLES.SETTINGS, ['Setting', 'Value', 'What it does'], DEFAULT_SETTINGS);
-  [TABLES.PEOPLE, TABLES.REQUESTS, TABLES.TASKS, TABLES.ACTIVITY].forEach(function (name) {
+  [TABLES.PEOPLE, TABLES.REQUESTS, TABLES.TASKS, TABLES.ACTIVITY, TABLES.SESSIONS].forEach(function (name) {
     ensureTable_(ss, name, COLUMNS[name].map(function (c) { return c[1]; }), []);
   });
   var blank = ss.getSheetByName('Sheet1');
@@ -26,6 +26,11 @@ function setup() {
   var me = lc_(Session.getEffectiveUser().getEmail());
   if (me && !personByEmail_(me, readPeople_())) {
     appendRows_(TABLES.PEOPLE, [{ email: me, name: me.split('@')[0], role: ROLES.ADMIN, ministry: 'Communications', active: 'Yes' }]);
+  }
+
+  // Staff at the owner's domain (e.g. calvaryirwin.com) can sign in without being added.
+  if (me && !readSettings_()['Self sign-up domains'] && !/@gmail\.com$/.test(me)) {
+    writeSettings_({ 'Self sign-up domains': me.split('@')[1] });
   }
 
   // Lock the data file: only the app (running as its owner) edits it.

@@ -20,8 +20,8 @@ function roleHolder_(role, people) {
 }
 
 function currentUser_(people) {
-  var email = lc_(Session.getActiveUser().getEmail());
-  if (!email) throw new Error('Could not identify you. Please sign in with your church Google account.');
+  if (!CURRENT_SESSION_) throw new Error('SIGNIN: Please sign in.');
+  var email = lc_(CURRENT_SESSION_.email);
   var p = personByEmail_(email, people || readPeople_());
   var role = p ? p.role : ROLES.STAFF;
   return {
@@ -29,7 +29,7 @@ function currentUser_(people) {
     name: p ? p.name : '',
     ministry: p ? p.ministry : '',
     role: role,
-    known: !!p,
+    known: !!(p && p.name),
     isAdmin: lc_(role) === lc_(ROLES.ADMIN),
     isDesigner: lc_(role) === lc_(ROLES.DESIGNER),
     isPastor: lc_(role) === lc_(ROLES.PASTOR)

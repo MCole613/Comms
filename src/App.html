@@ -26,13 +26,29 @@
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
   function spinner(n, msg) { clear(n).appendChild(el('div', { class: 'spinner', text: msg || 'Loading…' })); }
 
-  function api(name) {
-    var args = Array.prototype.slice.call(arguments, 1);
+  /* Signed-in calls all go through the server's call(token, name, args). */
+  var TOKEN_KEY = 'commsAppToken';
+  function loadToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
+  function saveToken(t) { S.token = t; try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) { /* memory only */ } }
+  S.token = loadToken();
+
+  function rawCall(fn, args) {
     return new Promise(function (resolve, reject) {
       var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) {
         reject(e && e.message ? e : new Error(String(e)));
       });
-      r[name].apply(r, args);
+      r[fn].apply(r, args);
+    });
+  }
+  function api(name) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return rawCall('call', [S.token, name, args]).catch(function (e) {
+      if (/SIGNIN:/.test(e.message)) {
+        saveToken('');
+        showLogin(e.message.replace(/^.*SIGNIN:\s*/, ''));
+        return new Promise(function () {}); // the sign-in screen takes over
+      }
+      throw e;
     });
   }
 
@@ -120,7 +136,14 @@
   function closeModal() { $('#modal').hidden = true; }
 
   /* ================= boot ================= */
-  api('apiBootstrap').then(function (b) {
+  function start() {
+    if (!S.token) { showLogin(); return; }
+    document.body.classList.remove('signed-out');
+    api('apiBootstrap').then(booted).catch(function (e) {
+      clear($('#home')).appendChild(el('div', { class: 'notice err', text: e.message }));
+    });
+  }
+  function booted(b) {
     S.boot = b;
     $('#who').textContent = b.user.name || b.user.email;
     document.querySelectorAll('[data-role=design]').forEach(function (t) { t.hidden = !(b.user.isAdmin || b.user.isDesigner); });
@@ -131,11 +154,60 @@
       var p = loc.parameter || {};
       if (p.request) openRequest(p.request);
       else if (p.view && loaders[p.view]) show(p.view);
-      else loadHome();
+      else show('home');
     });
-  }).catch(function (e) {
-    clear($('#home')).appendChild(el('div', { class: 'notice err', text: e.message }));
+  }
+
+  /* ================= sign in ================= */
+  function showLogin(message) {
+    document.body.classList.add('signed-out');
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('active', v.id === 'view-login'); });
+    var box = clear($('#login'));
+    var email = el('input', { type: 'email', id: 'loginEmail', autocomplete: 'email', placeholder: 'you@example.com' });
+    var code = el('input', { type: 'text', id: 'loginCode', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '6-digit code' });
+    var msg = el('div', { class: 'muted', style: 'min-height:1.5em' });
+    var codeStep = el('div', { hidden: true }, [el('div', { class: 'q' }, [el('span', { class: 'qt', text: 'Code from your email' }), code])]);
+    var btn = el('button', { class: 'primary', type: 'submit', text: 'Email me a code' });
+    var again = el('button', { class: 'link', type: 'button', text: 'Use a different email', hidden: true });
+    var form = el('form', { class: 'card profile', novalidate: true }, [
+      el('h2', { text: 'Sign in' }),
+      el('p', { class: 'muted', text: message || 'Enter your email and we\'ll send you a sign-in code. You\'ll stay signed in on this device.' }),
+      el('div', { class: 'q' }, [el('span', { class: 'qt', text: 'Email' }), email]),
+      codeStep, msg, el('div', { class: 'actions' }, [btn, again])
+    ]);
+    again.addEventListener('click', function () { codeStep.hidden = true; again.hidden = true; email.readOnly = false; btn.textContent = 'Email me a code'; msg.textContent = ''; email.focus(); });
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var sending = codeStep.hidden;
+      var done = busy(btn, sending ? 'Sending…' : 'Checking…');
+      var p = sending ? rawCall('apiRequestCode', [email.value]) : rawCall('apiVerifyCode', [email.value, code.value]);
+      p.then(function (res) {
+        done();
+        if (sending) {
+          codeStep.hidden = false; again.hidden = false; email.readOnly = true;
+          btn.textContent = 'Sign in';
+          msg.textContent = 'If ' + email.value.trim() + ' has access, a code is on its way. Not on the list? Ask the communications team to add you.';
+          code.focus();
+        } else {
+          saveToken(res.token);
+          start();
+        }
+      }).catch(function (e) { done(); if (!sending) btn.textContent = 'Sign in'; msg.textContent = e.message.replace(/^Error:\s*/, ''); });
+    });
+    box.appendChild(form);
+    email.focus();
+  }
+
+  $('#signOut').addEventListener('click', function () {
+    var t = S.token;
+    saveToken('');
+    rawCall('call', [t, 'apiSignOut', []]).catch(function () {});
+    S.boot = null;
+    $('#newRequest').dataset.loaded = '';
+    showLogin('You\'re signed out.');
   });
+
+  start();
   function setBadge(n) { var b = $('#taskBadge'); b.hidden = !n; b.textContent = n; }
 
   /* ================= rows ================= */
@@ -824,7 +896,7 @@
     tbody.appendChild(personRow({}));
     box.appendChild(el('div', { class: 'card' }, [
       el('h2', { text: 'People' }),
-      el('p', { class: 'muted', text: 'Communications = admin (reviews requests, owns "Comms" tasks). Designer gets Level 1 and Series design work. Pastor gets pastor steps on series. Everyone else is Staff. New staff are added automatically the first time they open the app.' }),
+      el('p', { class: 'muted', text: 'Add anyone who should use the app, with or without a church email. They sign in with a code sent to that address. Communications = admin (reviews requests, owns "Comms" tasks). Designer gets Level 1 and Series design work. Pastor gets pastor steps on series. Everyone else is Staff. Set Active to No to remove someone\'s access.' }),
       el('div', { style: 'overflow-x:auto' }, [el('table', { class: 'people' }, [
         el('thead', {}, [el('tr', {}, ['Name', 'Email', 'Role', 'Ministry', 'Active', ''].map(function (h) { return el('th', { text: h }); }))]), tbody])])
     ]));

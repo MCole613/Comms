@@ -25,7 +25,9 @@ const { createContext } = require('./gas-mock');
       return raw ? String(v) : esc(v);
     });
   }
-  const stub = `<script>
+  const stubFor = (token) => `<script>
+    (function () { var store = { commsAppToken: ${JSON.stringify(token || '')} };
+      Object.defineProperty(window, 'localStorage', { value: { getItem: k => store[k] || null, setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } } }); })();
     window.google = { script: {
       url: { getLocation: cb => cb({ parameter: {} }) },
       get run() { let ok, bad; const p = new Proxy({}, { get: (_, name) => {
@@ -43,7 +45,19 @@ const { createContext } = require('./gas-mock');
   page.on('pageerror', e => console.log('PAGE ERROR', e.message));
   await page.route('https://fonts.googleapis.com/**', r => r.abort());
   page.on('dialog', d => d.accept());
-  await page.setContent(render(read('Index.html')).replace('<head>', '<head>' + stub));
+  const load = (token) => page.setContent(render(read('Index.html')).replace('<head>', '<head>' + stubFor(token)));
+  await load('');
+  await page.waitForSelector('#loginEmail');
+  await page.screenshot({ path: path.join(out, '0-sign-in.png') });
+  // Sign in the real way: request a code, read it from the sent email, enter it.
+  const me = process.env.PREVIEW_USER || who.ADMIN;
+  await page.fill('#loginEmail', me);
+  await page.click('form button.primary');
+  await page.waitForSelector('#loginCode', { state: 'visible' });
+  const mail = g.__mail.filter(m => m.to === me).pop();
+  await page.fill('#loginCode', /code: (\d{6})/.exec(mail.subject)[1]);
+  await page.screenshot({ path: path.join(out, '0b-code.png') });
+  await page.click('form button.primary');
   const shot = (n) => page.screenshot({ path: path.join(out, n + '.png'), fullPage: true });
   const tab = async (v, sel) => { await page.click(`.tab[data-view=${v}]`); await page.waitForSelector(sel); };
 
@@ -72,7 +86,7 @@ const { createContext } = require('./gas-mock');
 
     // The requester's view of a draft waiting for review.
     g.__setUser(who.KARA);
-    await page.setContent(render(read('Index.html')).replace('<head>', '<head>' + stub));
+    await load(g.__token());
     await page.waitForSelector('.stat');
     await shot('7-requester-home');
     await page.click('text=CK Movie Night graphic');

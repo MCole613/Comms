@@ -7,7 +7,9 @@ function doGet() {
   try { s = readSettings_(); } catch (e) { /* not set up yet: the page shows the error */ }
   var t = HtmlService.createTemplateFromFile('Index');
   t.brand = brandOf_(s);
-  return t.evaluate().setTitle(t.brand.headerText).addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return t.evaluate().setTitle(t.brand.headerText).addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    // Allows embedding on the church website (e.g. a ChurchCo HTML Embed block).
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function include(name) { return HtmlService.createHtmlOutputFromFile(name).getContent(); }
@@ -247,4 +249,21 @@ function apiSavePerson(p) {
     if (existing) updateRow_(TABLES.PEOPLE, rec); else appendRows_(TABLES.PEOPLE, [rec]);
     return { ok: true };
   });
+}
+
+/* ---------------- what the page may call (through call()) ---------------- */
+
+/** Built on demand: files load in order, so a top-level map could miss later files. */
+function apiMap_() {
+  return {
+    apiBootstrap: apiBootstrap, apiSetMyProfile: apiSetMyProfile, apiHome: apiHome, apiMyTasks: apiMyTasks,
+    apiRequests: apiRequests, apiRequestDetail: apiRequestDetail, apiTeamTimeline: apiTeamTimeline,
+    apiDesignQueue: apiDesignQueue, apiCalendar: apiCalendar, apiAdminData: apiAdminData,
+    apiSaveSettings: apiSaveSettings, apiSavePerson: apiSavePerson,
+    apiSubmitRequest: apiSubmitRequest, apiReview: apiReview, apiRequestChange: apiRequestChange,
+    apiApplyNewDate: apiApplyNewDate, apiSaveResults: apiSaveResults, apiSetStatus: apiSetStatus,
+    apiSetTaskDone: apiSetTaskDone, apiReassignTask: apiReassignTask,
+    apiUploadFiles: apiUploadFiles, apiApproveDesign: apiApproveDesign, apiDesignFeedback: apiDesignFeedback,
+    apiReleaseHeldFeedback: apiReleaseHeldFeedback, apiSignOut: apiSignOut
+  };
 }

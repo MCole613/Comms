@@ -218,6 +218,7 @@ function notifyFinalDelivered_(r, s, people) {
 /* ---------------- weekly digest (time-driven) ---------------- */
 
 function sendWeeklyDigest() {
+  try { cleanupSessions_(); } catch (e) { console.warn('Session cleanup: ' + e.message); }
   var s = readSettings_();
   if (/^(no|false|n)$/i.test(s['Send weekly digest'] || '')) return;
   var people = readPeople_();
