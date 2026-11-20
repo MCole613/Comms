@@ -37,9 +37,11 @@ test('Series (A New Thing Coming, 5 weeks) matches the hub, including weekly pos
   assert.equal(got[0].owner, 'Pastor');
 });
 
-test('Design only matches the hub (in-house)', () => {
+test('Design only: 21-day timeline (in-house)', () => {
   const got = P.buildPlan({ tier: 'Design', eventDate: '2026-11-11', designItems: 'Social graphic' }, { today: far, designerTiers: ['Level 1', 'Series'] });
-  assert.deepEqual(got.map(s => s.offset + s.owner), ['-10Comms', '-9Leader', '-3Comms']);
+  assert.deepEqual(got.map(s => s.offset + s.owner), ['-21Comms', '-18Leader', '-7Comms']);
+  assert.equal(got[0].dueDate, '2026-10-21');
+  assert.equal(P.runwayFlag('Design', '2026-11-01', '2026-11-11'), 'COMPRESSED: 10 days of runway, Design needs 21');
   assert.equal(got[0].task, 'Create the design in-house: Social graphic');
 });
 

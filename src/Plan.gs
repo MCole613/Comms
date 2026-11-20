@@ -15,7 +15,7 @@ var TIER_INFO = {
   'Level 3': { mode: 'Sprinkle (NextGen channels)', label: 'Level 3 (NextGen)', runway: 35 },
   'Level 4': { mode: 'Snuggle', label: 'Level 4 (Individual)', runway: 21 },
   'Series': { mode: 'Series (multi-week)', label: 'Sermon Series', runway: 63 },
-  'Design': { mode: 'Design only', label: 'Graphic design only', runway: 14 }
+  'Design': { mode: 'Design only', label: 'Graphic design only', runway: 21 }
 };
 
 /*
@@ -119,11 +119,11 @@ var TEMPLATES = {
   ],
 
   'Design': [
-    { o: -10, ch: 'Design', t: 'Create the design in-house: {designItems}', who: 'Comms', when: 'inhouse', key: 'draft' },
-    { o: -10, ch: 'Design', t: 'First draft due from designer: {designItems}', who: 'Designer', when: 'designer', key: 'draft' },
-    { o: -9, ch: 'Design', t: 'Review the first draft and reply with approval or requested changes', who: 'Leader', key: 'review' },
-    { o: -3, ch: 'Design', t: 'FINAL design files in the request folder', who: 'Comms', when: 'inhouse', key: 'final' },
-    { o: -3, ch: 'Design', t: 'FINAL assets delivered to request folder', who: 'Designer', when: 'designer', key: 'final' }
+    { o: -21, ch: 'Design', t: 'Create the design in-house: {designItems}', who: 'Comms', when: 'inhouse', key: 'draft' },
+    { o: -21, ch: 'Design', t: 'First draft due from designer: {designItems}', who: 'Designer', when: 'designer', key: 'draft' },
+    { o: -18, ch: 'Design', t: 'Review the first draft and reply with approval or requested changes', who: 'Leader', key: 'review' },
+    { o: -7, ch: 'Design', t: 'FINAL design files in the request folder', who: 'Comms', when: 'inhouse', key: 'final' },
+    { o: -7, ch: 'Design', t: 'FINAL assets delivered to request folder', who: 'Designer', when: 'designer', key: 'final' }
   ]
 };
 
