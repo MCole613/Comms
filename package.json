@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node scripts/bundle.js && node --test tests/*.test.js",
     "preview": "node tests/preview.js ./preview",
-    "bundle": "node scripts/bundle.js"
+    "bundle": "node scripts/bundle.js",
+    "demo": "node scripts/bundle.js && node scripts/demo.js"
   }
 }
