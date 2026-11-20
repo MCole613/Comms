@@ -1,0 +1,9 @@
+{
+  "name": "comms-hub",
+  "private": true,
+  "description": "Church staff communications hub (Google Apps Script web app)",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "preview": "node tests/preview.js ./preview"
+  }
+}

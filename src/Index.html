@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" id="appName">Communications Hub</div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="new">New Request</button>
+      <button class="tab" data-view="tasks">My Tasks <span class="badge" id="taskBadge" hidden></span></button>
+      <button class="tab" data-view="requests">All Requests</button>
+      <button class="tab" data-view="timeline">Team Timeline</button>
+    </nav>
+    <div class="who" id="who"></div>
+  </header>
+
+  <main>
+    <div id="notice" class="notice" hidden></div>
+
+    <!-- NEW REQUEST -->
+    <section class="view active" id="view-new">
+      <div class="layout-2col">
+        <form id="requestForm" class="card" novalidate>
+          <h2>Communications request</h2>
+          <p class="muted">Tell us what's happening. We'll build the timeline, assign the tasks and send the brief to our designer.</p>
+
+          <fieldset>
+            <legend>The basics</legend>
+            <label>Title of event or initiative *<input name="title" required maxlength="200" placeholder="e.g. Fall Women's Retreat"></label>
+            <div class="row">
+              <label>Event / launch date *<input type="date" name="eventDate" required></label>
+              <label>Time<input name="eventTime" placeholder="e.g. 6:30–8:30 PM"></label>
+            </div>
+            <div class="row">
+              <label>Ministry<select name="ministry" id="ministrySelect"><option value="">—</option></select></label>
+              <label>Location<input name="location" placeholder="e.g. Main Auditorium"></label>
+            </div>
+            <label>Who is this for?<input name="audience" placeholder="e.g. Women 18+, parents of 5th graders"></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>What do you need? *</legend>
+            <div id="deliverables" class="checks"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>The message</legend>
+            <label>Description<textarea name="description" rows="3" placeholder="What is it, and why should people care?"></textarea></label>
+            <label>Key message / exact copy<textarea name="keyMessage" rows="3" placeholder="Headline, dates, prices — exactly as it should appear"></textarea></label>
+            <div class="row">
+              <label>Call to action<input name="callToAction" placeholder="e.g. Register by Oct 1"></label>
+              <label>Registration / link<input name="link" type="url" placeholder="https://"></label>
+            </div>
+            <label>Contact for questions<input name="contact" placeholder="Name, email or phone"></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>For the designer</legend>
+            <label>Design notes<textarea name="designNotes" rows="3" placeholder="Look & feel, colors, sizes, examples you like, logos to include"></textarea></label>
+            <label>Attachments (logos, photos, examples — 10 MB each)<input type="file" id="files" multiple></label>
+          </fieldset>
+
+          <div class="actions">
+            <button type="submit" class="primary" id="submitBtn">Submit request</button>
+          </div>
+        </form>
+
+        <aside class="card sticky">
+          <h3>Your timeline</h3>
+          <div id="preview" class="muted">Pick a date and what you need to see your timeline.</div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- MY TASKS -->
+    <section class="view" id="view-tasks">
+      <div class="card">
+        <div class="card-head">
+          <h2>My tasks</h2>
+          <label class="inline"><input type="checkbox" id="showDone"> Show completed</label>
+        </div>
+        <div id="taskList"></div>
+      </div>
+    </section>
+
+    <!-- ALL REQUESTS -->
+    <section class="view" id="view-requests">
+      <div class="card">
+        <div class="card-head">
+          <h2>All requests</h2>
+          <input type="search" id="requestSearch" placeholder="Search title, ministry, person…">
+        </div>
+        <div id="requestList"></div>
+      </div>
+    </section>
+
+    <!-- TEAM TIMELINE -->
+    <section class="view" id="view-timeline">
+      <div class="card">
+        <div class="card-head">
+          <h2>Team timeline</h2>
+          <select id="personFilter"><option value="">Everyone</option></select>
+        </div>
+        <div id="timelineList"></div>
+      </div>
+    </section>
+
+    <!-- REQUEST DETAIL -->
+    <section class="view" id="view-detail">
+      <button class="link" id="backBtn">← Back</button>
+      <div id="detail"></div>
+    </section>
+  </main>
+
+  <?!= include('App'); ?>
+</body>
+</html>
