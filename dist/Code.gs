@@ -1832,19 +1832,43 @@ function apiSetTaskDone(taskKey, done) {
   });
 }
 
-/** Admin can hand a task to someone else. */
-function apiReassignTask(taskKey, email) {
+/**
+ * Admin hands tasks on a request to someone else (usually the ministry
+ * leader who submitted it). taskKeys: the tasks to move. The new owner gets
+ * one email listing what they now own.
+ */
+function apiReassignTasks(requestId, taskKeys, email) {
+  var settings = readSettings_();
   var people = readPeople_();
   var user = currentUser_(people);
   assertAdmin_(user);
-  if (!personByEmail_(email, people)) throw new Error('Choose someone from the People list.');
-  return withLock_(function () {
-    var t = readTable_(TABLES.TASKS).filter(function (x) { return x.taskKey === taskKey; })[0];
-    if (!t) throw new Error('Task not found.');
-    t.assigneeEmail = lc_(email);
-    updateRow_(TABLES.TASKS, t);
-    return { ok: true };
+  email = lc_(email);
+  var to = personByEmail_(email, people);
+  if (!to) throw new Error('Choose someone from the People list.');
+  var keys = [].concat(taskKeys || []);
+  if (!keys.length) throw new Error('There are no tasks to move.');
+
+  var out = withLock_(function () {
+    var r = findRequest_(requestId);
+    var moved = [];
+    readTable_(TABLES.TASKS).forEach(function (t) {
+      if (t.requestId !== requestId || keys.indexOf(t.taskKey) < 0 || t.status !== TASK.OPEN) return;
+      if (lc_(t.assigneeEmail) === email) return;
+      t.assigneeEmail = email;
+      updateRow_(TABLES.TASKS, t);
+      moved.push(t);
+    });
+    if (moved.length) {
+      logActivity_(requestId, user.email, 'Reassigned', moved.length + ' task' + (moved.length > 1 ? 's' : '') + ' given to ' + (to.name || email) + ': ' +
+        moved.map(function (t) { return t.task; }).join('; '));
+    }
+    return { r: r, moved: moved };
   });
+
+  if (out.moved.length && email !== user.email) {
+    try { notifyReassigned_(out.r, out.moved, to, user, settings, people); } catch (e) { console.warn('Email: ' + e.message); }
+  }
+  return { moved: out.moved.length };
 }
 
 // ===== Design.gs =====
@@ -2319,6 +2343,17 @@ function notifyChange_(r, text, cancel, s, people, user) {
       '<p style="background:#f7f9fa;padding:12px;border-radius:6px">' + escBr_(text) + '</p>' +
       (r.requestedNewDate ? '<p>The new date is waiting for you to apply it in the app.</p>' : '') +
       button_(appLink_(r.requestId), 'Open request', s)
+  });
+}
+
+function notifyReassigned_(r, tasks, to, by, s, people) {
+  var sorted = tasks.slice().sort(function (a, b) { return a.dueDate < b.dueDate ? -1 : 1; });
+  send_(s, {
+    to: to.email, replyTo: by.email,
+    subject: 'New task' + (tasks.length > 1 ? 's' : '') + ' for you: ' + r.title,
+    html: '<p>Hi ' + esc_(String(to.name || '').split(' ')[0] || 'there') + ', ' + esc_(nameOf_(by.email, people)) + ' gave you ' +
+      (tasks.length > 1 ? tasks.length + ' tasks' : 'a task') + ' for <b>' + esc_(r.title) + '</b>.</p>' + taskTable_(sorted) +
+      '<p>Check them off in the app as you finish them.</p>' + button_(appLink_(r.requestId), 'Open in the app', s)
   });
 }
 
@@ -2956,7 +2991,7 @@ function apiMap_() {
     apiSaveSettings: apiSaveSettings, apiSavePerson: apiSavePerson,
     apiSubmitRequest: apiSubmitRequest, apiReview: apiReview, apiRequestChange: apiRequestChange,
     apiApplyNewDate: apiApplyNewDate, apiSaveResults: apiSaveResults, apiSetStatus: apiSetStatus,
-    apiSetTaskDone: apiSetTaskDone, apiReassignTask: apiReassignTask,
+    apiSetTaskDone: apiSetTaskDone, apiReassignTasks: apiReassignTasks,
     apiUploadFiles: apiUploadFiles, apiApproveDesign: apiApproveDesign, apiDesignFeedback: apiDesignFeedback,
     apiReleaseHeldFeedback: apiReleaseHeldFeedback, apiSignOut: apiSignOut
   };

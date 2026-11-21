@@ -76,6 +76,7 @@
   var DAY_RE = /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/;
   var SKIP = { B: 1, STRONG: 1, TEXTAREA: 1, OPTION: 1, SELECT: 1, SCRIPT: 1, STYLE: 1, TITLE: 1, INPUT: 1 };
   function boldDays(rootNode) {
+    if (!rootNode || !rootNode.isConnected) return; // already removed from the page
     var walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
         for (var p = n.parentNode; p && p !== rootNode.parentNode; p = p.parentNode) if (SKIP[p.nodeName]) return NodeFilter.FILTER_REJECT;
@@ -257,7 +258,7 @@
     return !t.cancelled && t.key !== 'review' && (u.isAdmin || t.assigneeEmail === u.email);
   }
 
-  function taskRow(t, showEvent, onChange) {
+  function taskRow(t, showEvent, onChange, onRequestPage) {
     var box = el('input', { type: 'checkbox', class: 'check', title: t.key === 'review' ? 'Approve or request changes on the request page' : 'Mark done' });
     box.checked = !!t.done;
     box.disabled = !canTick(t);
@@ -273,7 +274,7 @@
         if (onChange) onChange();
       }).catch(function (e) { box.checked = !box.checked; box.disabled = false; fail(e); });
     });
-    var row = el('div', { class: 'item task clickable' + (t.done ? ' is-done' : ''), onclick: function () { openRequest(t.requestId); } }, [
+    var row = el('div', { class: 'item task' + (onRequestPage ? '' : ' clickable') + (t.done ? ' is-done' : ''), onclick: onRequestPage ? null : function () { openRequest(t.requestId); } }, [
       box,
       el('div', {}, [el('div', { class: 'sub', text: pretty(t.dueDate) }), duePill(t)]),
       el('div', {}, [
@@ -741,9 +742,20 @@
 
     var tasksCard = el('div', { class: 'card' }, [el('h3', { text: 'Tasks' })]);
     if (!d.tasks.length) tasksCard.appendChild(el('div', { class: 'empty', text: 'The plan is built when the communications team approves the request.' }));
+    if (can.editTasks) {
+      var mine = d.tasks.filter(function (t) { return !t.done && !t.cancelled && t.assigneeEmail === S.boot.user.email; });
+      if (mine.length && r.requesterEmail && r.requesterEmail !== S.boot.user.email) {
+        tasksCard.appendChild(el('div', { class: 'panel', style: 'margin:0 0 12px' }, [
+          el('div', { text: 'You have ' + mine.length + ' open task' + (mine.length > 1 ? 's' : '') + ' on this request. Hand them to ' + (r.requester || r.requesterEmail) + '? They\'ll get an email listing them.' }),
+          el('div', { class: 'btn-row' }, [actionBtn('primary', 'Give my ' + mine.length + ' task' + (mine.length > 1 ? 's' : '') + ' to ' + first(r.requester || r.requesterEmail),
+            function () { return api('apiReassignTasks', r.requestId, mine.map(function (t) { return t.taskKey; }), r.requesterEmail); },
+            r.requestId, mine.length + ' task' + (mine.length > 1 ? 's' : '') + ' moved to ' + (r.requester || r.requesterEmail) + '.')])
+        ]));
+      }
+    }
     d.tasks.forEach(function (t) {
-      var row = taskRow(t, false);
-      row.classList.remove('clickable'); row.onclick = null;
+      var row = taskRow(t, false, null, true);
+      if (can.editTasks && !t.done && !t.cancelled) row.querySelector('.right').appendChild(assignSelect(t, r));
       tasksCard.appendChild(row);
     });
     left.appendChild(tasksCard);
@@ -756,6 +768,26 @@
     }
 
     box.appendChild(el('div', { class: 'layout-2col' }, [left, el('aside', { class: 'card sticky' }, [el('h3', { text: 'Timeline' }), timelineList(d.tasks, r.eventDate)])]));
+  }
+
+  /** Admin: pick who owns a task. */
+  function assignSelect(t, r) {
+    var people = (S.boot.people || []).filter(function (p) { return p.active !== 'No' && p.email; });
+    if (!people.some(function (p) { return p.email === t.assigneeEmail; }) && t.assigneeEmail) people.push({ email: t.assigneeEmail, name: t.assigneeName });
+    var sel = el('select', { class: 'assign', title: 'Reassign this task', 'aria-label': 'Assigned to' }, people
+      .sort(function (a, b) { return String(a.name || a.email).localeCompare(String(b.name || b.email)); })
+      .map(function (p) {
+        var label = (p.name || p.email) + (p.email === r.requesterEmail ? ' (requester)' : '');
+        return el('option', { value: p.email, text: label, selected: p.email === t.assigneeEmail ? 'selected' : null });
+      }));
+    sel.addEventListener('click', function (e) { e.stopPropagation(); });
+    sel.addEventListener('change', function () {
+      sel.disabled = true;
+      api('apiReassignTasks', r.requestId, [t.taskKey], sel.value).then(function () {
+        reload(r.requestId, 'Task reassigned.');
+      }).catch(function (e) { sel.value = t.assigneeEmail; sel.disabled = false; fail(e); });
+    });
+    return sel;
   }
 
   function actionBtn(cls, label, fn, requestId, msg) {

@@ -373,17 +373,41 @@ function apiSetTaskDone(taskKey, done) {
   });
 }
 
-/** Admin can hand a task to someone else. */
-function apiReassignTask(taskKey, email) {
+/**
+ * Admin hands tasks on a request to someone else (usually the ministry
+ * leader who submitted it). taskKeys: the tasks to move. The new owner gets
+ * one email listing what they now own.
+ */
+function apiReassignTasks(requestId, taskKeys, email) {
+  var settings = readSettings_();
   var people = readPeople_();
   var user = currentUser_(people);
   assertAdmin_(user);
-  if (!personByEmail_(email, people)) throw new Error('Choose someone from the People list.');
-  return withLock_(function () {
-    var t = readTable_(TABLES.TASKS).filter(function (x) { return x.taskKey === taskKey; })[0];
-    if (!t) throw new Error('Task not found.');
-    t.assigneeEmail = lc_(email);
-    updateRow_(TABLES.TASKS, t);
-    return { ok: true };
+  email = lc_(email);
+  var to = personByEmail_(email, people);
+  if (!to) throw new Error('Choose someone from the People list.');
+  var keys = [].concat(taskKeys || []);
+  if (!keys.length) throw new Error('There are no tasks to move.');
+
+  var out = withLock_(function () {
+    var r = findRequest_(requestId);
+    var moved = [];
+    readTable_(TABLES.TASKS).forEach(function (t) {
+      if (t.requestId !== requestId || keys.indexOf(t.taskKey) < 0 || t.status !== TASK.OPEN) return;
+      if (lc_(t.assigneeEmail) === email) return;
+      t.assigneeEmail = email;
+      updateRow_(TABLES.TASKS, t);
+      moved.push(t);
+    });
+    if (moved.length) {
+      logActivity_(requestId, user.email, 'Reassigned', moved.length + ' task' + (moved.length > 1 ? 's' : '') + ' given to ' + (to.name || email) + ': ' +
+        moved.map(function (t) { return t.task; }).join('; '));
+    }
+    return { r: r, moved: moved };
   });
+
+  if (out.moved.length && email !== user.email) {
+    try { notifyReassigned_(out.r, out.moved, to, user, settings, people); } catch (e) { console.warn('Email: ' + e.message); }
+  }
+  return { moved: out.moved.length };
 }

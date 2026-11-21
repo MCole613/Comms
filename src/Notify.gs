@@ -153,6 +153,17 @@ function notifyChange_(r, text, cancel, s, people, user) {
   });
 }
 
+function notifyReassigned_(r, tasks, to, by, s, people) {
+  var sorted = tasks.slice().sort(function (a, b) { return a.dueDate < b.dueDate ? -1 : 1; });
+  send_(s, {
+    to: to.email, replyTo: by.email,
+    subject: 'New task' + (tasks.length > 1 ? 's' : '') + ' for you: ' + r.title,
+    html: '<p>Hi ' + esc_(String(to.name || '').split(' ')[0] || 'there') + ', ' + esc_(nameOf_(by.email, people)) + ' gave you ' +
+      (tasks.length > 1 ? tasks.length + ' tasks' : 'a task') + ' for <b>' + esc_(r.title) + '</b>.</p>' + taskTable_(sorted) +
+      '<p>Check them off in the app as you finish them.</p>' + button_(appLink_(r.requestId), 'Open in the app', s)
+  });
+}
+
 function notifyDateApplied_(r, s, people) {
   send_(s, { to: r.requesterEmail, subject: 'New date confirmed: ' + r.title,
     html: '<p>Your plan for <b>' + esc_(r.title) + '</b> now builds toward <b>' + esc_(prettyIso(r.eventDate)) + '</b>. Task dates were updated.</p>' + button_(appLink_(r.requestId), 'See the plan', s) });

@@ -368,3 +368,35 @@ test('the app never emails placeholder addresses', () => {
   g.__call('apiSubmitRequest', PROMO, []);
   assert.ok(!g.__mail.some(m => /@example\./.test(m.to)));
 });
+
+test('admin hands their tasks on a request to the ministry leader', () => {
+  const { g } = app();
+  asKara(g);
+  g.__call('apiSubmitRequest', PROMO, []);
+  g.__setUser(ADMIN);
+  g.__call('apiReview', 'REQ-2026-001', { action: 'approve', tier: 'Level 3' });
+  g.__mail.length = 0;
+  const mine = g.__table('Tasks').filter(t => t.assigneeEmail === ADMIN && t.status === 'Not started');
+  assert.ok(mine.length > 3);
+
+  // Only admins can reassign.
+  g.__setUser(KARA);
+  assert.throws(() => g.__api('apiReassignTasks', 'REQ-2026-001', mine.map(t => t.taskKey), KARA), /Only the communications team/);
+
+  g.__setUser(ADMIN);
+  const res = g.__call('apiReassignTasks', 'REQ-2026-001', mine.map(t => t.taskKey), KARA);
+  assert.equal(res.moved, mine.length);
+  assert.equal(g.__table('Tasks').filter(t => t.assigneeEmail === ADMIN && t.status === 'Not started').length, 0);
+  const email = g.__mail.find(m => m.to === KARA);
+  assert.match(email.subject, /New tasks for you: Spring Kids Camp/);
+  assert.equal(email.replyTo, ADMIN);
+  assert.ok(g.__table('Activity').some(a => a.type === 'Reassigned' && /given to Kara Kids/.test(a.text)));
+
+  // Kara can now check them off; one task can also go to someone else.
+  g.__setUser(KARA);
+  g.__call('apiSetTaskDone', mine[0].taskKey, true);
+  g.__setUser(ADMIN);
+  g.__call('apiReassignTasks', 'REQ-2026-001', [mine[1].taskKey], DESIGNER);
+  assert.equal(g.__table('Tasks').find(t => t.taskKey === mine[1].taskKey).assigneeEmail, DESIGNER);
+  assert.throws(() => g.__api('apiReassignTasks', 'REQ-2026-001', [mine[1].taskKey], 'nobody@else.test'), /People list/);
+});

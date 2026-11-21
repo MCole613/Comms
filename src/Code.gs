@@ -262,7 +262,7 @@ function apiMap_() {
     apiSaveSettings: apiSaveSettings, apiSavePerson: apiSavePerson,
     apiSubmitRequest: apiSubmitRequest, apiReview: apiReview, apiRequestChange: apiRequestChange,
     apiApplyNewDate: apiApplyNewDate, apiSaveResults: apiSaveResults, apiSetStatus: apiSetStatus,
-    apiSetTaskDone: apiSetTaskDone, apiReassignTask: apiReassignTask,
+    apiSetTaskDone: apiSetTaskDone, apiReassignTasks: apiReassignTasks,
     apiUploadFiles: apiUploadFiles, apiApproveDesign: apiApproveDesign, apiDesignFeedback: apiDesignFeedback,
     apiReleaseHeldFeedback: apiReleaseHeldFeedback, apiSignOut: apiSignOut
   };
