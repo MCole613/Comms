@@ -144,12 +144,20 @@ function addDaysIso(iso, n) {
 function daysBetweenIso(a, b) {
   return Math.round((parseIsoDate(b) - parseIsoDate(a)) / 86400000);
 }
+var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** The app's one date format: "Friday November-20-2026". */
 function prettyIso(iso) {
   if (!iso) return '';
   var d = parseIsoDate(iso);
-  var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  return WEEKDAYS[d.getDay()] + ' ' + MONTHS[d.getMonth()] + '-' + d.getDate() + '-' + d.getFullYear();
+}
+
+/** Bolds weekday names in the text parts of an HTML string (not inside tags). */
+function boldWeekdays(html) {
+  var re = /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/g;
+  return String(html).replace(/(^|>)([^<]+)/g, function (m, gt, text) { return gt + text.replace(re, '<b>$1</b>'); });
 }
 
 /* ---------------- tiers ---------------- */

@@ -280,7 +280,7 @@ function apiApplyNewDate(requestId) {
       t.dueDate = d < today ? today : d;
       updateRow_(TABLES.TASKS, t);
     });
-    logActivity_(requestId, user.email, 'Change', 'Date moved from ' + r.eventDate + ' to ' + r.requestedNewDate + '; open tasks shifted ' + delta + ' days.');
+    logActivity_(requestId, user.email, 'Change', 'Date moved from ' + prettyIso(r.eventDate) + ' to ' + prettyIso(r.requestedNewDate) + '; open tasks shifted ' + delta + ' days.');
     r.eventDate = r.requestedNewDate;
     r.requestedNewDate = '';
     r.flags = runwayFlag(r.tier || r.suggestedTier, today, r.eventDate);

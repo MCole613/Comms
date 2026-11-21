@@ -154,7 +154,7 @@ function importHub_(hub) {
       task: text.replace(/ \(reply to the Communications email\)$/, '').replace(/ \(auto-emailed on approval\)$/, ''),
       owner: owner,
       assigneeEmail: lc_(t['Assigned Email']) || (owner === 'Comms' && cfg['Your email'] ? lc_(cfg['Your email']) : ownerEmail_(owner, r, people)),
-      status: /^done$/i.test(hubText_(t['Status'])) ? TASK.DONE : TASK.OPEN, notes: hubText_(t['Notes']), key: workflowKey_(text)
+      status: /^done$/i.test(hubText_(t['Status'])) ? TASK.DONE : TASK.OPEN, notes: reformatHubDates_(hubText_(t['Notes'])), key: workflowKey_(text)
     });
   });
   appendRows_(TABLES.TASKS, tasks);
@@ -173,6 +173,14 @@ function importHub_(hub) {
   appendRows_(TABLES.ACTIVITY, activity);
   out.activity = activity.length;
   return out;
+}
+
+/** "Sun, Oct 4, 2026" (the hub's style) → "Sunday October-4-2026". */
+function reformatHubDates_(s) {
+  return String(s).replace(/\b(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat), ([A-Z][a-z]{2}) (\d{1,2}), (\d{4})\b/g, function (m, mon, day, year) {
+    var mi = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(mon);
+    return mi < 0 ? m : prettyIso(year + '-' + ('0' + (mi + 1)).slice(-2) + '-' + ('0' + day).slice(-2));
+  });
 }
 
 function workflowKey_(text) {

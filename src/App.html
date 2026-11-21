@@ -54,12 +54,53 @@
 
   function parseDate(iso) { var p = String(iso).split('-'); return new Date(+p[0], +p[1] - 1, +p[2] || 1); }
   function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-  function pretty(s, withYear) {
+  var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  /** "Friday November-20-2026" — weekdays are bolded on screen by boldDays(). */
+  function pretty(s) {
     if (!s) return '—';
-    var o = { weekday: 'short', month: 'short', day: 'numeric' };
-    if (withYear || s.slice(0, 4) !== S.boot.today.slice(0, 4)) o.year = 'numeric';
-    return parseDate(s).toLocaleDateString(undefined, o);
+    var d = parseDate(s);
+    // Non-breaking hyphens keep "November-20-2026" on one line; it can only wrap after the weekday.
+    return WEEKDAYS[d.getDay()] + ' ' + MONTHS[d.getMonth()] + '\u2011' + d.getDate() + '\u2011' + d.getFullYear();
   }
+  /** "2026-11-20 09:00" → "Friday November-20-2026, 9:00 AM" */
+  function prettyStamp(s) {
+    var m = /^(\d{4}-\d{2}-\d{2})(?: (\d{1,2}):(\d{2}))?/.exec(String(s || ''));
+    if (!m) return s || '';
+    if (!m[2]) return pretty(m[1]);
+    var h = +m[2];
+    return pretty(m[1]) + ', ' + ((h % 12) || 12) + ':' + m[3] + (h < 12 ? ' AM' : ' PM');
+  }
+
+  /* Bold every weekday name on the page, wherever it appears. */
+  var DAY_RE = /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/;
+  var SKIP = { B: 1, STRONG: 1, TEXTAREA: 1, OPTION: 1, SELECT: 1, SCRIPT: 1, STYLE: 1, TITLE: 1, INPUT: 1 };
+  function boldDays(rootNode) {
+    var walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        for (var p = n.parentNode; p && p !== rootNode.parentNode; p = p.parentNode) if (SKIP[p.nodeName]) return NodeFilter.FILTER_REJECT;
+        return DAY_RE.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (n) {
+      var parts = n.nodeValue.split(/\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/);
+      var frag = document.createDocumentFragment();
+      parts.forEach(function (part, i) {
+        if (!part) return;
+        if (i % 2) { var b = document.createElement('b'); b.textContent = part; frag.appendChild(b); }
+        else frag.appendChild(document.createTextNode(part));
+      });
+      n.parentNode.replaceChild(frag, n);
+    });
+  }
+  new MutationObserver(function (records) {
+    records.forEach(function (r) {
+      r.addedNodes.forEach(function (n) { if (n.nodeType === 1 || n.nodeType === 3) boldDays(n.nodeType === 3 ? n.parentNode : n); });
+      if (r.type === 'characterData' && r.target.parentNode) boldDays(r.target.parentNode);
+    });
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
   function daysAway(s) { return Math.round((parseDate(s) - parseDate(S.boot.today)) / 86400000); }
   function first(name) { return String(name || '').split(' ')[0]; }
 
@@ -308,7 +349,7 @@
   function attentionText(r) {
     if (r.status === 'Needs Review') return 'Waiting for your review — set the tier and approve.';
     if (r.status === 'Needs Info') return 'The communications team needs more information.';
-    if (r.requestedNewDate) return 'Requested new date: ' + pretty(r.requestedNewDate, true);
+    if (r.requestedNewDate) return 'Requested new date: ' + pretty(r.requestedNewDate);
     if (r.designState === 'Feedback Held') return 'Extra design round requested — decide whether to allow it.';
     if (r.designState === 'In Review') return 'A design is ready for your review.';
     return '';
@@ -627,7 +668,7 @@
     list.forEach(function (t) {
       var label;
       if (daysAway(t.dueDate) < 0) label = 'Overdue';
-      else { var d = parseDate(t.dueDate); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); label = 'Week of ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+      else { var d = parseDate(t.dueDate); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); label = 'Week of ' + pretty(iso(d)); }
       if (label !== last) { box.appendChild(el('div', { class: 'week-head', text: label })); last = label; }
       box.appendChild(taskRow(t, true));
     });
@@ -663,7 +704,7 @@
     if (can.review) head.appendChild(reviewPanel(r));
     if (can.applyDate) head.appendChild(el('div', { class: 'panel attn' }, [
       el('h3', { text: 'Date change requested' }),
-      el('p', { text: 'Move from ' + pretty(r.eventDate, true) + ' to ' + pretty(r.requestedNewDate, true) + '? Open tasks shift by the same number of days and the calendar updates.' }),
+      el('p', { text: 'Move from ' + pretty(r.eventDate) + ' to ' + pretty(r.requestedNewDate) + '? Open tasks shift by the same number of days and the calendar updates.' }),
       actionBtn('primary', 'Apply new date', function () { return api('apiApplyNewDate', r.requestId); }, r.requestId, 'New date applied.')
     ]));
     if (can.releaseHeld) head.appendChild(heldPanel(r));
@@ -672,9 +713,9 @@
 
     var fields = [
       ['Ministry', r.ministry],
-      [series ? 'Series launch' : designOnly ? 'Files needed by' : 'Event date', pretty(r.eventDate, true)],
+      [series ? 'Series launch' : designOnly ? 'Files needed by' : 'Event date', pretty(r.eventDate)],
       ['Tier', (r.tier ? r.tier : 'Suggested: ' + r.suggestedTier) + (r.mode ? ' · ' + r.mode : '')],
-      ['Submitted', r.submitted],
+      ['Submitted', prettyStamp(r.submitted)],
       ['Who for', r.whoFor], ['Reach', r.reach], ['Bridge event', r.bridge],
       ['Big idea', r.bigIdea], ['Scripture', r.scripture], ['Weeks', r.seriesWeeks], ['Weekly titles', r.weeklyTitles],
       ['One next step', [r.nextStepType, r.oneNextStep].filter(Boolean).join(' — ')], ['Story', r.story],
@@ -709,7 +750,7 @@
 
     if (d.activity.length) {
       left.appendChild(el('div', { class: 'card' }, [el('h3', { text: 'Activity' }), el('ul', { class: 'activity' }, d.activity.slice().reverse().map(function (a) {
-        return el('li', {}, [el('div', { class: 'when', text: [a.at, a.type, a.byName].filter(Boolean).join(' · ') }), a.text,
+        return el('li', {}, [el('div', { class: 'when', text: [prettyStamp(a.at), a.type, a.byName].filter(Boolean).join(' · ') }), a.text,
           a.link ? el('div', {}, [el('a', { href: a.link, target: '_blank', rel: 'noopener', text: 'Files' })]) : null]);
       }))]));
     }

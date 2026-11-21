@@ -54,7 +54,7 @@ test('short notice compresses past steps to today with a note', () => {
   const got = P.buildPlan({ tier: 'Level 3', eventDate: '2026-11-08', needsDesign: 'Yes', registration: 'No' }, { today: '2026-11-04', designerTiers: [] });
   const first = got[0];
   assert.equal(first.dueDate, '2026-11-04');
-  assert.equal(first.notes, 'Compressed: original date Sun, Oct 4, 2026');
+  assert.equal(first.notes, 'Compressed: original date Sunday October-4-2026');
   assert.equal(P.runwayFlag('Level 3', '2026-11-04', '2026-11-08'), 'COMPRESSED: 4 days of runway, Level 3 needs 35');
   assert.equal(P.runwayFlag('Level 1', '2026-11-04', '2026-12-23'), 'COMPRESSED: 49 days of runway, Level 1 needs 84');
   assert.equal(P.runwayFlag('Level 4', '2026-11-02', '2027-03-05'), '');
@@ -67,4 +67,14 @@ test('tier suggestions follow the audience questions', () => {
   assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'A specific ministry or group', reach: '25-49%' }), 'Level 4');
   assert.equal(P.suggestTier({ requestType: 'Series' }), 'Series');
   assert.equal(P.suggestTier({ requestType: 'Design' }), 'Design');
+});
+
+test('dates read "Friday November-20-2026" and weekdays are bolded in emails', () => {
+  const { createContext } = require('./gas-mock');
+  const g = createContext({ userEmail: 'a@church.test', now: new Date(2026, 10, 20, 9), owner: 'a@church.test' });
+  assert.equal(g.prettyIso('2026-11-20'), 'Friday November-20-2026');
+  assert.equal(g.prettyIso('2026-10-04'), 'Sunday October-4-2026');
+  assert.equal(g.boldWeekdays('<td title="Friday">Due Friday November-20-2026</td>'), '<td title="Friday">Due <b>Friday</b> November-20-2026</td>');
+  assert.equal(g.reformatHubDates_('Compressed: original date Sun, Oct 4, 2026 | Files uploaded Mon, Nov 16, 2026'),
+    'Compressed: original date Sunday October-4-2026 | Files uploaded Monday November-16-2026');
 });

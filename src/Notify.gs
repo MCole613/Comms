@@ -22,7 +22,7 @@ function send_(settings, opts) {
   var cc = [].concat(opts.cc || []).map(lc_).filter(function (e) { return isRealEmail_(e) && to.indexOf(e) < 0; });
   var msg = {
     to: to.join(','), subject: opts.subject, name: settings['Brand header text'] || 'Communications',
-    htmlBody: wrapEmail_(opts.html, settings)
+    htmlBody: boldWeekdays(wrapEmail_(opts.html, settings))
   };
   if (cc.length) msg.cc = cc.join(',');
   if (opts.replyTo && isRealEmail_(opts.replyTo)) msg.replyTo = opts.replyTo;

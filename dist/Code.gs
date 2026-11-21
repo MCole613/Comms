@@ -237,12 +237,20 @@ function addDaysIso(iso, n) {
 function daysBetweenIso(a, b) {
   return Math.round((parseIsoDate(b) - parseIsoDate(a)) / 86400000);
 }
+var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** The app's one date format: "Friday November-20-2026". */
 function prettyIso(iso) {
   if (!iso) return '';
   var d = parseIsoDate(iso);
-  var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  return WEEKDAYS[d.getDay()] + ' ' + MONTHS[d.getMonth()] + '-' + d.getDate() + '-' + d.getFullYear();
+}
+
+/** Bolds weekday names in the text parts of an HTML string (not inside tags). */
+function boldWeekdays(html) {
+  var re = /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/g;
+  return String(html).replace(/(^|>)([^<]+)/g, function (m, gt, text) { return gt + text.replace(re, '<b>$1</b>'); });
 }
 
 /* ---------------- tiers ---------------- */
@@ -1731,7 +1739,7 @@ function apiApplyNewDate(requestId) {
       t.dueDate = d < today ? today : d;
       updateRow_(TABLES.TASKS, t);
     });
-    logActivity_(requestId, user.email, 'Change', 'Date moved from ' + r.eventDate + ' to ' + r.requestedNewDate + '; open tasks shifted ' + delta + ' days.');
+    logActivity_(requestId, user.email, 'Change', 'Date moved from ' + prettyIso(r.eventDate) + ' to ' + prettyIso(r.requestedNewDate) + '; open tasks shifted ' + delta + ' days.');
     r.eventDate = r.requestedNewDate;
     r.requestedNewDate = '';
     r.flags = runwayFlag(r.tier || r.suggestedTier, today, r.eventDate);
@@ -2183,7 +2191,7 @@ function send_(settings, opts) {
   var cc = [].concat(opts.cc || []).map(lc_).filter(function (e) { return isRealEmail_(e) && to.indexOf(e) < 0; });
   var msg = {
     to: to.join(','), subject: opts.subject, name: settings['Brand header text'] || 'Communications',
-    htmlBody: wrapEmail_(opts.html, settings)
+    htmlBody: boldWeekdays(wrapEmail_(opts.html, settings))
   };
   if (cc.length) msg.cc = cc.join(',');
   if (opts.replyTo && isRealEmail_(opts.replyTo)) msg.replyTo = opts.replyTo;
@@ -2642,7 +2650,7 @@ function importHub_(hub) {
       task: text.replace(/ \(reply to the Communications email\)$/, '').replace(/ \(auto-emailed on approval\)$/, ''),
       owner: owner,
       assigneeEmail: lc_(t['Assigned Email']) || (owner === 'Comms' && cfg['Your email'] ? lc_(cfg['Your email']) : ownerEmail_(owner, r, people)),
-      status: /^done$/i.test(hubText_(t['Status'])) ? TASK.DONE : TASK.OPEN, notes: hubText_(t['Notes']), key: workflowKey_(text)
+      status: /^done$/i.test(hubText_(t['Status'])) ? TASK.DONE : TASK.OPEN, notes: reformatHubDates_(hubText_(t['Notes'])), key: workflowKey_(text)
     });
   });
   appendRows_(TABLES.TASKS, tasks);
@@ -2661,6 +2669,14 @@ function importHub_(hub) {
   appendRows_(TABLES.ACTIVITY, activity);
   out.activity = activity.length;
   return out;
+}
+
+/** "Sun, Oct 4, 2026" (the hub's style) → "Sunday October-4-2026". */
+function reformatHubDates_(s) {
+  return String(s).replace(/\b(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat), ([A-Z][a-z]{2}) (\d{1,2}), (\d{4})\b/g, function (m, mon, day, year) {
+    var mi = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(mon);
+    return mi < 0 ? m : prettyIso(year + '-' + ('0' + (mi + 1)).slice(-2) + '-' + ('0' + day).slice(-2));
+  });
 }
 
 function workflowKey_(text) {
