@@ -20,7 +20,7 @@ function app() {
 
 const PROMO = {
   ministry: 'Calvary Kids', kind: 'Promoting an event or ministry (communications, plus design if needed)',
-  'promo.title': 'Spring Kids Camp', 'promo.whoFor': 'A specific age group (Kids / Students / Young Adults)',
+  'promo.title': 'Spring Kids Camp', 'promo.whoFor': 'Level 3 - All NextGen (Calvary Kids, Calvary Students, Calvary Young Adults)',
   'promo.reach': '25-49%', 'promo.bridge': 'No', 'promo.nextStepType': 'Sign up / register',
   'promo.oneNextStep': 'Register in Church Center.', 'promo.story': 'Last year a shy 3rd grader found friends.',
   'promo.eventDate': '2027-03-12', 'promo.registration': 'Yes', 'promo.needsDesign': 'Yes',
@@ -123,7 +123,7 @@ test('Level 1 sprint cap is enforced unless overridden', () => {
   const { g } = app();
   g.__call('apiSaveSettings', { 'Sprint cap per year': '1' });
   asKara(g);
-  const big = { ...PROMO, 'promo.whoFor': 'Whole church + community', 'promo.reach': '80%+' };
+  const big = { ...PROMO, 'promo.whoFor': 'Level 1 - Whole church + community', 'promo.reach': '80%+' };
   g.__call('apiSubmitRequest', big, []);
   g.__call('apiSubmitRequest', { ...big, 'promo.title': 'Second big event' }, []);
   g.__setUser(ADMIN);
@@ -321,7 +321,7 @@ test('import from the old hub: settings, people, requests, tasks, history', () =
   const RH = ['Request ID', 'Submitted', 'Requester', 'Requester Email', 'Ministry', 'Event / Initiative', 'Event Date', 'Suggested Tier', 'Final Tier', 'Mode', 'Status', 'Flags', 'Who For', 'Story', 'Details', 'Needs Design', 'Design Items', 'Design Folder', 'Request Type', 'Series Weeks', 'Design State', 'Design Round', 'Design Feedback Log'];
   put('Requests', [RH,
     ['REQ-2026-002', new Date(2026, 9, 15, 19, 10), 'Pat Pastor', PASTOR, 'Sermon Series', 'A New Thing', new Date(2027, 0, 3), 'Series', 'Series', 'Series (multi-week)', 'Planned', '', 'Whole church', 'God is doing a new thing.', 'Isaiah 43', 'Yes', 'Key art', '', 'Sermon Series', '5', 'Approved', '1', 'Nov 16 | Round 1 from Pat: drop the pink\nNov 16 | APPROVED by Pat'],
-    ['REQ-2026-005', '11/2/2026 18:42:54', 'Kara Kids', KARA, 'Calvary Kids', '1Team Night', '3/5/2027', 'Level 4', 'Level 4', 'Snuggle', 'Planned', '', 'A specific ministry or group', 'Honoring our team', '', 'Yes', 'Main graphic', '', 'Promotion', '', 'Briefed', '0', '']
+    ['REQ-2026-005', '11/2/2026 18:42:54', 'Kara Kids', KARA, 'Calvary Kids', '1Team Night', '3/5/2027', 'Level 4', 'Level 4', 'Snuggle', 'Planned', '', 'Level 4 - Everything else', 'Honoring our team', '', 'Yes', 'Main graphic', '', 'Promotion', '', 'Briefed', '0', '']
   ]);
   const TH = ['Task Key', 'Request ID', 'Event', 'Due Date', 'Channel', 'Task', 'Owner', 'Tier', 'Status', 'Google Task ID', 'Notes', 'Assigned To', 'Assigned Email'];
   put('Timeline', [TH,

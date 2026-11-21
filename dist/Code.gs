@@ -262,12 +262,16 @@ function boldWeekdays(html) {
 function suggestTier(req) {
   if (req.requestType === 'Series') return 'Series';
   if (req.requestType === 'Design') return 'Design';
-  var who = String(req.whoFor || '').toLowerCase();
-  var reach = String(req.reach || '');
-  var big = /50-79|80/.test(reach);
-  if (who.indexOf('whole church') === 0) return big || /^yes/i.test(req.bridge) ? 'Level 1' : 'Level 2';
-  if (who.indexOf('a specific next step') === 0) return 'Level 2';
-  if (who.indexOf('a specific age group') === 0) return big ? 'Level 2' : 'Level 3';
+  var who = String(req.whoFor || '').trim();
+  // The form's audience choices start with their level: "Level 3 - All NextGen (...)".
+  var m = /^Level ([1-4])\b/i.exec(who);
+  if (m) return 'Level ' + m[1];
+  // Older wording (e.g. requests imported from the hub).
+  var w = who.toLowerCase();
+  var big = /50-79|80/.test(String(req.reach || ''));
+  if (w.indexOf('whole church') === 0) return big || /^yes/i.test(req.bridge) ? 'Level 1' : 'Level 2';
+  if (w.indexOf('a specific next step') === 0) return 'Level 2';
+  if (w.indexOf('a specific age group') === 0) return big ? 'Level 2' : 'Level 3';
   return big ? 'Level 2' : 'Level 4';
 }
 
@@ -752,16 +756,16 @@ var FORMS = {
             "required": true,
             "choices": [
               {
-                "value": "Whole church + community"
+                "value": "Level 1 - Whole church + community"
               },
               {
-                "value": "A specific next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)"
+                "value": "Level 2 - A core repeatable next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)"
               },
               {
-                "value": "A specific age group (Kids / Students / Young Adults)"
+                "value": "Level 3 - All NextGen (Calvary Kids, Calvary Students, Calvary Young Adults)"
               },
               {
-                "value": "A specific ministry or group"
+                "value": "Level 4 - Everything else"
               }
             ]
           },

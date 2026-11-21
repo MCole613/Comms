@@ -396,16 +396,16 @@ var FORMS = {
             "required": true,
             "choices": [
               {
-                "value": "Whole church + community"
+                "value": "Level 1 - Whole church + community"
               },
               {
-                "value": "A specific next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)"
+                "value": "Level 2 - A core repeatable next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)"
               },
               {
-                "value": "A specific age group (Kids / Students / Young Adults)"
+                "value": "Level 3 - All NextGen (Calvary Kids, Calvary Students, Calvary Young Adults)"
               },
               {
-                "value": "A specific ministry or group"
+                "value": "Level 4 - Everything else"
               }
             ]
           },

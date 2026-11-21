@@ -61,10 +61,13 @@ test('short notice compresses past steps to today with a note', () => {
 });
 
 test('tier suggestions follow the audience questions', () => {
-  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'Whole church + community', reach: '80%+', bridge: 'Yes' }), 'Level 1');
-  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'A specific next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)', reach: '25-49%' }), 'Level 2');
+  // Older wording still works for imported requests.
   assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'A specific age group (Kids / Students / Young Adults)', reach: 'Under 25%' }), 'Level 3');
-  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'A specific ministry or group', reach: '25-49%' }), 'Level 4');
+  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'Level 3 - All NextGen (Calvary Kids, Calvary Students, Calvary Young Adults)', reach: '80%+' }), 'Level 3', 'the chosen level wins');
+  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'Level 1 - Whole church + community', reach: '80%+', bridge: 'Yes' }), 'Level 1');
+  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'Level 2 - A core repeatable next step (LifeGroups, Serving, Giving, Calvary 101, Baptism...)', reach: '25-49%' }), 'Level 2');
+  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'Level 3 - All NextGen (Calvary Kids, Calvary Students, Calvary Young Adults)', reach: 'Under 25%' }), 'Level 3');
+  assert.equal(P.suggestTier({ requestType: 'Promotion', whoFor: 'Level 4 - Everything else', reach: '25-49%' }), 'Level 4');
   assert.equal(P.suggestTier({ requestType: 'Series' }), 'Series');
   assert.equal(P.suggestTier({ requestType: 'Design' }), 'Design');
 });
